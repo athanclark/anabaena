@@ -1,8 +1,24 @@
 [package]
 name = "anabaena"
 version = "0.1.0"
+authors = ["Athan Clark <athan.clark@gmail.com>"]
 edition = "2021"
+description = "L-System (Lindenmayer system) framework for Rust"
+readme = "README.md"
+repository = "https://github.com/athanclark/anabaena"
+license = "BSD-3-Clause"
+keywords = ["lsystem", "generator", "alphabet"]
+categories = ["simulation"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+js = ["dep:getrandom"]
+
 [dependencies]
+getrandom = { version = "0.2.8", optional = true, features = ["js"] }
+rand = "0.8.5"
+
+[dev-dependencies]
+quickcheck = "1.0.3"
+quickcheck_macros = "1.0.0"
