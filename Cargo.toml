@@ -22,7 +22,7 @@ rand = "0.8.5"
 [dev-dependencies]
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
-turtle = "1.0.0-rc.3"
+turtle = { git = "https://github.com/sunjay/turtle.git" }
 
 [profile.dev.package."*"]
 opt-level = 3

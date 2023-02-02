@@ -185,7 +185,6 @@ impl<T> PredicateNeighbors<T> {
 /// expands to the other qualifiers `with_predicate` and `no_context` - the intent is to apply production
 /// rules with the order of "most specific" to "least specific", as [the Wikipedia article on context
 /// sensitive grammars details](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars).
-#[derive(Default)]
 pub struct LRulesQualified<P, T> {
     /// Matched first, as exact token matches with position relative to a selected token are most specific
     pub exact_matches: Vec<(ExactNeighbors<T>, LRulesSet<P, T>)>,
@@ -195,13 +194,19 @@ pub struct LRulesQualified<P, T> {
     pub no_context: Option<LRulesSet<P, T>>,
 }
 
-impl<P, T> LRulesQualified<P, T> {
-    pub fn new() -> Self {
+impl<P, T> Default for LRulesQualified<P, T> {
+    fn default() -> Self {
         Self {
             exact_matches: vec![],
             with_predicate: vec![],
             no_context: None,
         }
+    }
+}
+
+impl<P, T> LRulesQualified<P, T> {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

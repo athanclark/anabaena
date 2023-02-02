@@ -1,0 +1,85 @@
+use turtle::{Turtle, Distance};
+use anabaena::*;
+
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+enum SierpinskiAlphabet {
+    F,
+    G,
+    Left,
+    Right,
+}
+
+fn main() {
+    use SierpinskiAlphabet::*;
+
+    let rules: LRulesHash<(), SierpinskiAlphabet> = LRulesHash::new(vec![
+        (
+            F,
+            LRulesQualified {
+                no_context: Some(LRulesSet::new(vec![
+                    (1, Box::new(|_| vec![
+                        F,
+                        Right,
+                        G,
+                        Left,
+                        F,
+                        Left,
+                        G,
+                        Right,
+                        F,
+                    ]))
+                ])),
+                ..LRulesQualified::default()
+            }
+        ),
+        (
+            G,
+            LRulesQualified {
+                no_context: Some(LRulesSet::new(vec![
+                    (1, Box::new(|_| vec![
+                        G,
+                        G,
+                    ]))
+                ])),
+                ..LRulesQualified::default()
+            }
+        ),
+    ]);
+
+    let mut lsystem = LSystem {
+        string: vec![F, Right, G, Right, G],
+        rules,
+        context: (),
+        mk_context: Box::new(|_,_| ()),
+    };
+
+
+    let set = lsystem.nth(6).unwrap();
+
+
+    let mut turtle = Turtle::new();
+    turtle.use_degrees();
+    turtle.set_speed(25);
+    turtle.pen_up();
+    turtle.go_to([-200.0, -200.0]);
+    turtle.pen_down();
+
+    const UNIT_DISTANCE: Distance = 3.0;
+
+    for x in set {
+        match x {
+            F => {
+                turtle.forward(UNIT_DISTANCE);
+            }
+            G => {
+                turtle.forward(UNIT_DISTANCE);
+            }
+            Left => {
+                turtle.left(120.0);
+            }
+            Right => {
+                turtle.right(120.0);
+            }
+        }
+    }
+}

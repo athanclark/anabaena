@@ -2,37 +2,54 @@ use turtle::{Turtle, Angle, Distance, Point};
 use anabaena::*;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
-enum BTreeAlphabet {
-    LineEndingInLeaf,
-    Line,
-    LeftPush,
-    RightPop,
+enum PlantAlphabet {
+    X,
+    F,
+    Left,
+    Right,
+    Push,
+    Pop,
 }
 
 fn main() {
-    let rules: LRulesHash<(), BTreeAlphabet> = LRulesHash::new(vec![
+    use PlantAlphabet::*;
+
+    let rules: LRulesHash<(), PlantAlphabet> = LRulesHash::new(vec![
         (
-            BTreeAlphabet::Line,
+            X,
             LRulesQualified {
                 no_context: Some(LRulesSet::new(vec![
                     (1, Box::new(|_| vec![
-                        BTreeAlphabet::Line,
-                        BTreeAlphabet::Line,
+                        F,
+                        Left,
+                        Push,
+                        Push,
+                        X,
+                        Pop,
+                        Right,
+                        X,
+                        Pop,
+                        Right,
+                        F,
+                        Push,
+                        Right,
+                        F,
+                        X,
+                        Pop,
+                        Left,
+                        X,
                     ]))
                 ])),
                 ..LRulesQualified::default()
             }
         ),
         (
-            BTreeAlphabet::LineEndingInLeaf,
+            F,
             LRulesQualified {
                 no_context: Some(LRulesSet::new(vec![
                     (1, Box::new(|_| vec![
-                        BTreeAlphabet::Line,
-                        BTreeAlphabet::LeftPush,
-                        BTreeAlphabet::LineEndingInLeaf,
-                        BTreeAlphabet::RightPop,
-                        BTreeAlphabet::LineEndingInLeaf,
+                        F,
+                        F,
                     ]))
                 ])),
                 ..LRulesQualified::default()
@@ -41,18 +58,21 @@ fn main() {
     ]);
 
     let mut lsystem = LSystem {
-        string: vec![BTreeAlphabet::LineEndingInLeaf],
+        string: vec![X],
         rules,
         context: (),
         mk_context: Box::new(|_,_| ()),
     };
 
 
-    let set = lsystem.nth(6).unwrap();
+    let set = lsystem.nth(5).unwrap();
 
 
     let mut turtle = Turtle::new();
     turtle.use_degrees();
+    turtle.set_speed(25);
+    turtle.pen_up();
+    turtle.go_to([0.0, -200.0]);
 
     const UNIT_DISTANCE: Distance = 2.0;
     let mut lifo: Vec<(Point, Angle)> = vec![];
@@ -60,33 +80,33 @@ fn main() {
 
     for x in set {
         match x {
-            BTreeAlphabet::Line => {
+            X => {
+            }
+            F => {
                 turtle.pen_down();
                 turtle.forward(UNIT_DISTANCE);
                 turtle.pen_up();
             }
-            BTreeAlphabet::LineEndingInLeaf => {
-                turtle.pen_down();
-                turtle.forward(UNIT_DISTANCE);
-                turtle.pen_up();
-            }
-            BTreeAlphabet::LeftPush => {
-                // save the angle and position before turning
+            Push => {
                 lifo.push((turtle.position(), current_angle));
-                // turn
-                current_angle -= 45.0;
-                turtle.left(45.0);
             }
-            BTreeAlphabet::RightPop => {
+            Pop => {
                 let (pos, new_angle) = lifo.pop().unwrap();
                 let diff = new_angle - current_angle;
                 current_angle = new_angle;
                 // restore the saved angle and position
-                turtle.right(diff);
                 turtle.go_to(pos);
+                turtle.right(diff);
+            }
+            Left => {
                 // turn
-                current_angle += 45.0;
-                turtle.right(45.0);
+                current_angle -= 25.0;
+                turtle.left(25.0);
+            }
+            Right => {
+                // turn
+                current_angle += 25.0;
+                turtle.right(25.0);
             }
         }
     }
