@@ -1,11 +1,10 @@
+use rand::{distributions::WeightedIndex, prelude::*};
 use std::{collections::HashMap, hash::Hash};
-use rand::{prelude::*, distributions::WeightedIndex};
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
-
 
 /// A set of rules to apply when a token is matched, with a weight (`u8`) - the higher the weight compared
 /// to the rest of the options, the more likely it will be selected (i.e., this set of production rules
@@ -34,13 +33,13 @@ extern crate quickcheck_macros;
 pub type LRulesSet<P, T> = Vec<(u8, Box<dyn Fn(&P) -> Vec<T>>)>;
 
 /// Selects a result generator randomly, then applies the context.
-fn select<P, T>(options: &[(u8, Box<dyn Fn(&P) -> Vec<T>>)], context: &P, rng: &mut ThreadRng) -> Vec<T> {
+fn select<P, T>(options: &LRulesSet<P, T>, context: &P, rng: &mut ThreadRng) -> Vec<T> {
     let mut weights: Vec<u8> = vec![];
-    for (w,_) in options.iter() {
+    for (w, _) in options.iter() {
         weights.push(*w);
     }
     let dist = WeightedIndex::new(&weights).unwrap();
-    (options[dist.sample(rng)].1)(&context)
+    (options[dist.sample(rng)].1)(context)
 }
 
 /// Qualifier for selecting a [LRulesSet](LRulesSet), where the neighbors of the token are known
@@ -85,15 +84,23 @@ impl<T> ExactNeighbors<T> {
     }
 }
 
-impl<T> ExactNeighbors<T> where T: PartialEq {
+impl<T> ExactNeighbors<T>
+where
+    T: PartialEq,
+{
     fn is_valid(&self, prefix: &[T], suffix: &[T]) -> bool {
         let prefix_last: usize = if prefix.is_empty() {
             0
         } else {
             prefix.len() - 1
         };
-        self.before.iter().all(|(position, value)| prefix.get(prefix_last - *position) == Some(value))
-            && self.after.iter().all(|(position, value)| suffix.get(*position) == Some(value))
+        self.before
+            .iter()
+            .all(|(position, value)| prefix.get(prefix_last - *position) == Some(value))
+            && self
+                .after
+                .iter()
+                .all(|(position, value)| suffix.get(*position) == Some(value))
     }
 }
 
@@ -129,9 +136,12 @@ impl<T> ExactNeighbors<T> where T: PartialEq {
 ///     after: ['d','e']
 /// ```
 pub struct PredicateNeighbors<T> {
-    pub before: Box<dyn Fn(&[T]) -> bool>,
-    pub after: Box<dyn Fn(&[T]) -> bool>,
+    pub before: Box<Predicate<T>>,
+    pub after: Box<Predicate<T>>,
 }
+
+/// Simple type that qualifies either a prefix or suffix of tokens `T`.
+pub type Predicate<T> = fn(&[T]) -> bool;
 
 impl<T> Default for PredicateNeighbors<T> {
     fn default() -> Self {
@@ -205,18 +215,21 @@ impl<P, T> LRulesQualified<P, T> {
     }
 }
 
-impl<P, T> LRulesQualified<P, T> where T: PartialEq {
+impl<P, T> LRulesQualified<P, T>
+where
+    T: PartialEq,
+{
     /// Gets the first production rule set given the context around a selected token
     fn get_rules_set(&self, prefix: &[T], suffix: &[T]) -> Option<&LRulesSet<P, T>> {
         for (e, r) in self.exact_matches.iter() {
             if e.is_valid(prefix, suffix) {
-                return Some(&r)
+                return Some(r);
             }
         }
 
         for (p, r) in self.with_predicate.iter() {
             if p.is_valid(prefix, suffix) {
-                return Some(&r)
+                return Some(r);
             }
         }
 
@@ -224,12 +237,17 @@ impl<P, T> LRulesQualified<P, T> where T: PartialEq {
     }
 }
 
-
 /// Trait that allows different implementations of matching a specific token to their production rules
 pub trait ProductionRules<P, T> {
-    fn apply(&self, context: &P, token: T, index: usize, string: &[T], rng: &mut ThreadRng) -> Option<Vec<T>>;
+    fn apply(
+        &self,
+        context: &P,
+        token: T,
+        index: usize,
+        string: &[T],
+        rng: &mut ThreadRng,
+    ) -> Option<Vec<T>>;
 }
-
 
 /// Exact match of tokens to a set of production rules via a HashMap.
 ///
@@ -262,8 +280,18 @@ pub trait ProductionRules<P, T> {
 /// ```
 pub type LRulesHash<P, T> = HashMap<T, LRulesQualified<P, T>>;
 
-impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq {
-    fn apply(&self, context: &P, c: T, i: usize, string: &[T], rng: &mut ThreadRng) -> Option<Vec<T>> {
+impl<P, T> ProductionRules<P, T> for LRulesHash<P, T>
+where
+    T: Hash + Eq,
+{
+    fn apply(
+        &self,
+        context: &P,
+        c: T,
+        i: usize,
+        string: &[T],
+        rng: &mut ThreadRng,
+    ) -> Option<Vec<T>> {
         self.get(&c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
@@ -273,11 +301,12 @@ impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq {
                 let (_, suffix) = suffix.split_at(1);
                 suffix
             };
-            rules.get_rules_set(prefix, suffix).map(|rules| select(&rules, &context, rng))
+            rules
+                .get_rules_set(prefix, suffix)
+                .map(|rules| select(rules, context, rng))
         })
     }
 }
-
 
 /// Exact match of tokens to a set of production rules via a function.
 ///
@@ -309,8 +338,18 @@ impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq {
 /// ```
 pub type LRulesFunction<P, T> = fn(T) -> Option<LRulesQualified<P, T>>;
 
-impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T> where T: PartialEq {
-    fn apply(&self, context: &P, c: T, i: usize, string: &[T], rng: &mut ThreadRng) -> Option<Vec<T>> {
+impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T>
+where
+    T: PartialEq,
+{
+    fn apply(
+        &self,
+        context: &P,
+        c: T,
+        i: usize,
+        string: &[T],
+        rng: &mut ThreadRng,
+    ) -> Option<Vec<T>> {
         self(c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
@@ -320,7 +359,9 @@ impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T> where T: PartialEq {
                 let (_, suffix) = suffix.split_at(1);
                 suffix
             };
-            rules.get_rules_set(prefix, suffix).map(|rules| select(&rules, &context, rng))
+            rules
+                .get_rules_set(prefix, suffix)
+                .map(|rules| select(rules, context, rng))
         })
     }
 }
@@ -392,11 +433,18 @@ pub struct LSystem<R, P, T> {
     pub string: Vec<T>,
     pub rules: R,
     pub context: P,
-    pub mk_context: Box<dyn Fn(&P, &[T]) -> P>,
+    pub mk_context: Box<NextContext<P, T>>,
 }
 
+/// Used to generate the next contextual type `P` from the previous context, and previous string
+/// of tokens `&[T]`.
+pub type NextContext<P, T> = fn(&P, &[T]) -> P;
 
-impl<R, P, T> Iterator for LSystem<R, P, T> where T: PartialEq + Clone, R: ProductionRules<P, T> {
+impl<R, P, T> Iterator for LSystem<R, P, T>
+where
+    T: PartialEq + Clone,
+    R: ProductionRules<P, T>,
+{
     type Item = Vec<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -404,15 +452,24 @@ impl<R, P, T> Iterator for LSystem<R, P, T> where T: PartialEq + Clone, R: Produ
         let mut applied = false;
 
         let new_context: P = (self.mk_context)(&self.context, &self.string);
-        let new_string: Vec<T> = self.string.clone().into_iter().enumerate().map(|(i,c)| {
-            match self.rules.apply(&new_context, c.clone(), i, &self.string, &mut rng) {
-                None => vec![c],
-                Some(replacement) => {
-                    applied = true;
-                    replacement
+        let new_string: Vec<T> = self
+            .string
+            .clone()
+            .into_iter()
+            .enumerate()
+            .flat_map(|(i, c)| {
+                match self
+                    .rules
+                    .apply(&new_context, c.clone(), i, &self.string, &mut rng)
+                {
+                    None => vec![c],
+                    Some(replacement) => {
+                        applied = true;
+                        replacement
+                    }
                 }
-            }
-        }).flatten().collect();
+            })
+            .collect();
 
         if applied {
             self.string = new_string.clone();
@@ -424,8 +481,6 @@ impl<R, P, T> Iterator for LSystem<R, P, T> where T: PartialEq + Clone, R: Produ
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,7 +490,7 @@ mod tests {
         let rules: LRulesSet<(), char> = vec![
             (1, Box::new(|_| vec!['a'])),
             (1, Box::new(|_| vec!['b'])),
-            (1, Box::new(|_| vec!['c']))
+            (1, Box::new(|_| vec!['c'])),
         ];
         let mut rng = thread_rng();
         for _ in 0..10 {
@@ -459,19 +514,19 @@ mod tests {
         let suffix: &[char] = if i == xs.len() - 1 {
             &[]
         } else {
-            &xs[i+1..xs.len()]
+            &xs[i + 1..xs.len()]
         };
         let exact_neighbors: ExactNeighbors<char> = ExactNeighbors {
             before: {
                 let mut ys = HashMap::new();
-                for (j,y) in prefix.iter().enumerate() {
+                for (j, y) in prefix.iter().enumerate() {
                     ys.insert((prefix.len() - 1) - j, *y);
                 }
                 ys
             },
             after: {
                 let mut ys = HashMap::new();
-                for (j,y) in suffix.iter().enumerate() {
+                for (j, y) in suffix.iter().enumerate() {
                     ys.insert(j, *y);
                 }
                 ys

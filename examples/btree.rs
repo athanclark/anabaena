@@ -1,5 +1,5 @@
-use turtle::{Turtle, Angle, Distance, Point};
 use anabaena::*;
+use turtle::{Angle, Distance, Point, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 enum BTreeAlphabet {
@@ -14,29 +14,30 @@ fn main() {
         (
             BTreeAlphabet::Line,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        BTreeAlphabet::Line,
-                        BTreeAlphabet::Line,
-                    ]))
-                ]),
+                no_context: Some(vec![(
+                    1,
+                    Box::new(|_| vec![BTreeAlphabet::Line, BTreeAlphabet::Line]),
+                )]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
         (
             BTreeAlphabet::LineEndingInLeaf,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        BTreeAlphabet::Line,
-                        BTreeAlphabet::LeftPush,
-                        BTreeAlphabet::LineEndingInLeaf,
-                        BTreeAlphabet::RightPop,
-                        BTreeAlphabet::LineEndingInLeaf,
-                    ]))
-                ]),
+                no_context: Some(vec![(
+                    1,
+                    Box::new(|_| {
+                        vec![
+                            BTreeAlphabet::Line,
+                            BTreeAlphabet::LeftPush,
+                            BTreeAlphabet::LineEndingInLeaf,
+                            BTreeAlphabet::RightPop,
+                            BTreeAlphabet::LineEndingInLeaf,
+                        ]
+                    }),
+                )]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
     ]);
 
@@ -44,12 +45,10 @@ fn main() {
         string: vec![BTreeAlphabet::LineEndingInLeaf],
         rules,
         context: (),
-        mk_context: Box::new(|_,_| ()),
+        mk_context: Box::new(|_, _| ()),
     };
 
-
     let set = lsystem.nth(6).unwrap();
-
 
     let mut turtle = Turtle::new();
     turtle.use_degrees();

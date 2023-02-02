@@ -1,5 +1,5 @@
-use turtle::{Turtle, Distance};
 use anabaena::*;
+use turtle::{Distance, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 enum KochAlphabet {
@@ -9,12 +9,13 @@ enum KochAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), KochAlphabet> = LRulesHash::from([
-        (
-            KochAlphabet::Forward,
-            LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
+    let rules: LRulesHash<(), KochAlphabet> = LRulesHash::from([(
+        KochAlphabet::Forward,
+        LRulesQualified {
+            no_context: Some(vec![(
+                1,
+                Box::new(|_| {
+                    vec![
                         KochAlphabet::Forward,
                         KochAlphabet::Left,
                         KochAlphabet::Forward,
@@ -24,23 +25,21 @@ fn main() {
                         KochAlphabet::Forward,
                         KochAlphabet::Left,
                         KochAlphabet::Forward,
-                    ]))
-                ]),
-                ..LRulesQualified::default()
-            }
-        ),
-    ]);
+                    ]
+                }),
+            )]),
+            ..LRulesQualified::default()
+        },
+    )]);
 
     let mut lsystem = LSystem {
         string: vec![KochAlphabet::Forward],
         rules,
         context: (),
-        mk_context: Box::new(|_,_| ()),
+        mk_context: Box::new(|_, _| ()),
     };
 
-
     let set = lsystem.nth(2).unwrap();
-
 
     let mut turtle = Turtle::new();
     turtle.use_degrees();

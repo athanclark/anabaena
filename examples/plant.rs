@@ -1,5 +1,5 @@
-use turtle::{Turtle, Angle, Distance, Point};
 use anabaena::*;
+use turtle::{Angle, Distance, Point, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 enum PlantAlphabet {
@@ -18,42 +18,24 @@ fn main() {
         (
             X,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        F,
-                        Left,
-                        Push,
-                        Push,
-                        X,
-                        Pop,
-                        Right,
-                        X,
-                        Pop,
-                        Right,
-                        F,
-                        Push,
-                        Right,
-                        F,
-                        X,
-                        Pop,
-                        Left,
-                        X,
-                    ]))
-                ]),
+                no_context: Some(vec![(
+                    1,
+                    Box::new(|_| {
+                        vec![
+                            F, Left, Push, Push, X, Pop, Right, X, Pop, Right, F, Push, Right, F,
+                            X, Pop, Left, X,
+                        ]
+                    }),
+                )]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
         (
             F,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        F,
-                        F,
-                    ]))
-                ]),
+                no_context: Some(vec![(1, Box::new(|_| vec![F, F]))]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
     ]);
 
@@ -61,12 +43,10 @@ fn main() {
         string: vec![X],
         rules,
         context: (),
-        mk_context: Box::new(|_,_| ()),
+        mk_context: Box::new(|_, _| ()),
     };
 
-
     let set = lsystem.nth(5).unwrap();
-
 
     let mut turtle = Turtle::new();
     turtle.use_degrees();
@@ -80,8 +60,7 @@ fn main() {
 
     for x in set {
         match x {
-            X => {
-            }
+            X => {}
             F => {
                 turtle.pen_down();
                 turtle.forward(UNIT_DISTANCE);

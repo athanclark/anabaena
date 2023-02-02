@@ -1,5 +1,5 @@
-use turtle::{Turtle, Distance};
 use anabaena::*;
+use turtle::{Distance, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 enum SierpinskiAlphabet {
@@ -16,28 +16,16 @@ fn main() {
         (
             F,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        F,
-                        Left,
-                        G,
-                    ]))
-                ]),
+                no_context: Some(vec![(1, Box::new(|_| vec![F, Left, G]))]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
         (
             G,
             LRulesQualified {
-                no_context: Some(vec![
-                    (1, Box::new(|_| vec![
-                        F,
-                        Right,
-                        G,
-                    ]))
-                ]),
+                no_context: Some(vec![(1, Box::new(|_| vec![F, Right, G]))]),
                 ..LRulesQualified::default()
-            }
+            },
         ),
     ]);
 
@@ -45,12 +33,10 @@ fn main() {
         string: vec![F],
         rules,
         context: (),
-        mk_context: Box::new(|_,_| ()),
+        mk_context: Box::new(|_, _| ()),
     };
 
-
     let set = lsystem.nth(10).unwrap();
-
 
     let mut turtle = Turtle::new();
     turtle.use_degrees();
