@@ -14,11 +14,11 @@ enum PlantAlphabet {
 fn main() {
     use PlantAlphabet::*;
 
-    let rules: LRulesHash<(), PlantAlphabet> = LRulesHash::new(vec![
+    let rules: LRulesHash<(), PlantAlphabet> = LRulesHash::from([
         (
             X,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         F,
                         Left,
@@ -39,19 +39,19 @@ fn main() {
                         Left,
                         X,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),
         (
             F,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         F,
                         F,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),

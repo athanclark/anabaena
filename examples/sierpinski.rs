@@ -12,11 +12,11 @@ enum SierpinskiAlphabet {
 fn main() {
     use SierpinskiAlphabet::*;
 
-    let rules: LRulesHash<(), SierpinskiAlphabet> = LRulesHash::new(vec![
+    let rules: LRulesHash<(), SierpinskiAlphabet> = LRulesHash::from([
         (
             F,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         F,
                         Right,
@@ -28,19 +28,19 @@ fn main() {
                         Right,
                         F,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),
         (
             G,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         G,
                         G,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),

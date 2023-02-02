@@ -10,23 +10,23 @@ enum BTreeAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), BTreeAlphabet> = LRulesHash::new(vec![
+    let rules: LRulesHash<(), BTreeAlphabet> = LRulesHash::from([
         (
             BTreeAlphabet::Line,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         BTreeAlphabet::Line,
                         BTreeAlphabet::Line,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),
         (
             BTreeAlphabet::LineEndingInLeaf,
             LRulesQualified {
-                no_context: Some(LRulesSet::new(vec![
+                no_context: Some(vec![
                     (1, Box::new(|_| vec![
                         BTreeAlphabet::Line,
                         BTreeAlphabet::LeftPush,
@@ -34,7 +34,7 @@ fn main() {
                         BTreeAlphabet::RightPop,
                         BTreeAlphabet::LineEndingInLeaf,
                     ]))
-                ])),
+                ]),
                 ..LRulesQualified::default()
             }
         ),

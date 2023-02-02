@@ -10,55 +10,45 @@ extern crate quickcheck_macros;
 /// A set of rules to apply when a token is matched, with a weight (`u8`) - the higher the weight compared
 /// to the rest of the options, the more likely it will be selected (i.e., this set of production rules
 /// satisfies a [stochastic grammar](https://en.wikipedia.org/wiki/L-system#Stochastic_grammars)).
+///
 /// `P` is the context used when generating a replacement string (`Vec<T>`).
-#[derive(Default)]
-pub struct LRulesSet<P, T> {
-    options: Vec<(u8, Box<dyn Fn(&P) -> Vec<T>>)>,
-}
+///
+/// As an example taken from [Wikipedia](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
+///
+/// ```
+/// use anabaena::LRulesSet;
+///
+/// // rule for the "A" character
+/// let algae_rules_a: LRulesSet<(), char> = vec![
+///     (1, Box::new(|_| vec!['A', 'B']))
+/// ];
+///
+/// // rule for the "B" character
+/// let algae_rules_b: LRulesSet<(), char> = vec![
+///     (1, Box::new(|_| vec!['A']))
+/// ];
+/// ```
+///
+/// Note that both of these rule sets have a unitary (`()`) context (no context is computed on each L-System
+/// iteration), and the alphabet type they correspond to is `char`.
+pub type LRulesSet<P, T> = Vec<(u8, Box<dyn Fn(&P) -> Vec<T>>)>;
 
-impl<P, T> LRulesSet<P, T> {
-    /// Create a new rules set.
-    ///
-    /// As an example taken from [Wikipedia](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
-    ///
-    /// ```
-    /// use anabaena::LRulesSet;
-    ///
-    /// // rule for the "A" character
-    /// let algae_rules_a: LRulesSet<(), char> = LRulesSet::new(vec![
-    ///     (1, Box::new(|_| vec!['A', 'B']))
-    /// ]);
-    ///
-    /// // rule for the "B" character
-    /// let algae_rules_b: LRulesSet<(), char> = LRulesSet::new(vec![
-    ///     (1, Box::new(|_| vec!['A']))
-    /// ]);
-    /// ```
-    ///
-    /// Note that both of these rule sets have a unitary (`()`) context (no context is computed on each L-System
-    /// iteration), and the alphabet type they correspond to is `char`.
-    pub fn new(options: Vec<(u8, Box<dyn Fn(&P) -> Vec<T>>)>) -> Self {
-        LRulesSet {
-            options,
-        }
+/// Selects a result generator randomly, then applies the context.
+fn select<P, T>(options: &[(u8, Box<dyn Fn(&P) -> Vec<T>>)], context: &P, rng: &mut ThreadRng) -> Vec<T> {
+    let mut weights: Vec<u8> = vec![];
+    for (w,_) in options.iter() {
+        weights.push(*w);
     }
-
-    /// Selects a result generator randomly, then applies the context.
-    fn select(&self, context: &P, rng: &mut ThreadRng) -> Vec<T> {
-        let mut weights: Vec<u8> = vec![];
-        for (w,_) in self.options.iter() {
-            weights.push(*w);
-        }
-        let dist = WeightedIndex::new(&weights).unwrap();
-        (self.options[dist.sample(rng)].1)(&context)
-    }
+    let dist = WeightedIndex::new(&weights).unwrap();
+    (options[dist.sample(rng)].1)(&context)
 }
 
 /// Qualifier for selecting a [LRulesSet](LRulesSet), where the neighbors of the token are known
 /// as constants, with some direct adjacency from the character being matched. This enables "[Context-sensitive
 /// grammars](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars)"; where the context in question
-/// simply matches the exact characters neighboring the selected character. The `usize` key in the
-/// `HashMap` represents the "distance from the selected character".
+/// simply matches the exact characters neighboring the selected character.
+///
+/// The `usize` key in the `HashMap` represents the "distance from the selected character".
 ///
 /// In the Wikipedia article linked, the production rule `b < a > c -> aa` would have `b` and `c` matched with
 /// this `ExactNeighbors`:
@@ -107,8 +97,12 @@ impl<T> ExactNeighbors<T> where T: PartialEq {
     }
 }
 
-/// Qualifier for selecting a `LRulesSet`, where neighbors of the token must pass a Boolean predicate. Note
-/// that there is no modification of the input string in the predicate - the prefix and suffix are applied
+/// Qualifier for selecting a `LRulesSet`, where neighbors of the token must pass a Boolean predicate.
+/// This enables "[Context-sensitive
+/// grammars](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars)"; where the context in question
+/// is more flexible than the [ExactNeighbors](ExactNeighbors) version, and simply has to pass a predicate.
+///
+/// Note that there is no modification of the input string in the predicate - the prefix and suffix are applied
 /// to the predicates _as-is_:
 ///
 /// ```
@@ -159,6 +153,7 @@ impl<T> PredicateNeighbors<T> {
 }
 
 /// The complete set of production rules for a selected character, with gradually relaxing constraints.
+///
 /// Note that the _first_ stochastic production rule set is returned when qualifying a selected token - as
 /// an example, take the following set of rules around a selected token `'s'`:
 ///
@@ -170,12 +165,12 @@ impl<T> PredicateNeighbors<T> {
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.before.insert(0, 'a'); // an 'a' character directly preceeds the selector
-///         (neighbors, LRulesSet::new(vec![(1, Box::new(|_| vec!['a', 'a', 's']))]))
+///         (neighbors, vec![(1, Box::new(|_| vec!['a', 'a', 's']))])
 ///     },
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.after.insert(0, 'b'); // a 'b' character directly follows the selector
-///         (neighbors, LRulesSet::new(vec![(1, Box::new(|_| vec!['s', 'b', 'b']))]))
+///         (neighbors, vec![(1, Box::new(|_| vec!['s', 'b', 'b']))])
 ///     }
 /// ];
 /// ```
@@ -236,45 +231,40 @@ pub trait ProductionRules<P, T> {
 }
 
 
-/// Exact match of tokens to a set of production rules via a HashMap. As an example taken from the
+/// Exact match of tokens to a set of production rules via a HashMap.
+///
+/// As an example taken from the
 /// [Wikipedia article section demonstrating algae](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
 ///
 /// ```
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesHash<(), char> = LRulesHash::new(vec![
+/// let rules: LRulesHash<(), char> = LRulesHash::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
+///            no_context: Some(vec![
 ///                (1, Box::new(|_| vec!['A', 'B'])),
-///            ])),
+///            ]),
 ///            ..LRulesQualified::default()
 ///         }
 ///     ),
 ///     (
 ///         'B',
 ///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
+///            no_context: Some(vec![
 ///                (1, Box::new(|_| vec!['A'])),
-///            ])),
+///            ]),
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
 /// ]);
 /// ```
-// FIXME make FromIterator?
-pub struct LRulesHash<P, T>(HashMap<T, LRulesQualified<P, T>>);
+pub type LRulesHash<P, T> = HashMap<T, LRulesQualified<P, T>>;
 
-impl<P, T> LRulesHash<P, T> where T: Eq + Hash {
-    pub fn new(xs: Vec<(T, LRulesQualified<P, T>)>) -> Self {
-        Self(xs.into_iter().collect())
-    }
-}
-
-impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq + Clone {
+impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq {
     fn apply(&self, context: &P, c: T, i: usize, string: &[T], rng: &mut ThreadRng) -> Option<Vec<T>> {
-        self.0.get(&c).and_then(|rules| {
+        self.get(&c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
             let suffix = if suffix.is_empty() {
@@ -283,34 +273,99 @@ impl<P, T> ProductionRules<P, T> for LRulesHash<P, T> where T: Hash + Eq + Clone
                 let (_, suffix) = suffix.split_at(1);
                 suffix
             };
-            rules.get_rules_set(prefix, suffix).map(|rules| rules.select(&context, rng))
+            rules.get_rules_set(prefix, suffix).map(|rules| select(&rules, &context, rng))
+        })
+    }
+}
+
+
+/// Exact match of tokens to a set of production rules via a function.
+///
+/// As an example taken from the
+/// [Wikipedia article section demonstrating algae](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
+///
+/// ```
+/// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
+///
+/// let rules: LRulesFunction<(), char> = |c| {
+///     match c {
+///         'A' =>
+///             Some(LRulesQualified {
+///                no_context: Some(vec![
+///                    (1, Box::new(|_| vec!['A', 'B'])),
+///                ]),
+///                ..LRulesQualified::default()
+///             }),
+///         'B' =>
+///             Some(LRulesQualified {
+///                no_context: Some(vec![
+///                    (1, Box::new(|_| vec!['A'])),
+///                ]),
+///                ..LRulesQualified::default()
+///             }),
+///         _ => None,
+///     }
+/// };
+/// ```
+pub type LRulesFunction<P, T> = fn(T) -> Option<LRulesQualified<P, T>>;
+
+impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T> where T: PartialEq {
+    fn apply(&self, context: &P, c: T, i: usize, string: &[T], rng: &mut ThreadRng) -> Option<Vec<T>> {
+        self(c).and_then(|rules| {
+            let (prefix, suffix) = string.split_at(i);
+            // drop token that matched `c`
+            let suffix = if suffix.is_empty() {
+                suffix
+            } else {
+                let (_, suffix) = suffix.split_at(1);
+                suffix
+            };
+            rules.get_rules_set(prefix, suffix).map(|rules| select(&rules, &context, rng))
         })
     }
 }
 
 /// Consists of the current string of tokens, and the rules applied to it.
-/// Represents a running state, stepped as an Iterator. Taking the example from
+/// Represents a running state, stepped as an Iterator.
+///
+/// Note that the L-System is generic in the alphabet type `T` - this means we can define any
+/// Enum to treat as tokens, and even enrich them with parametric information as described in
+/// [the Wikipedia article on Parametric grammars](https://en.wikipedia.org/wiki/L-system#Parametric_grammars).
+///
+/// Furthermore, each iteration of the L-System can develop and share a "contextual state" `P`, to be used
+/// in the production rules when generating more tokens. It's a stateful value, and can be used to track
+/// concepts like age of the L-System, or pre-process the previous iteration's tokens to make production
+/// rules more efficient.
+///
+/// Lastly, the L-System is also parametric in its production rule set implementation `R` - as long as the
+/// production rule system suits the [ProductionRules](ProductionRules) trait, then the L-System can iterate.
+/// We provide two simple implementations: [LRulesHash](LRulesHash), which indexes the production rule sets
+/// by each matching selector token `T` (implying `T` must suit `Hash` and `Eq`), and
+/// [LRulesFunction](LRulesFunction), which is a simple function where the author is expected to provide their
+/// own matching functionality.
+///
+/// Taking the example from
 /// [Wikipedia on algae](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
 ///
 /// ```
 /// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesHash<(), char> = LRulesHash::new(vec![
+/// let rules: LRulesHash<(), char> = LRulesHash::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
+///            no_context: Some(vec![
 ///                (1, Box::new(|_| vec!['A', 'B'])),
-///            ])),
+///            ]),
 ///            ..LRulesQualified::default()
 ///         }
 ///     ),
 ///     (
 ///         'B',
 ///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
+///            no_context: Some(vec![
 ///                (1, Box::new(|_| vec!['A'])),
-///            ])),
+///            ]),
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
@@ -377,14 +432,14 @@ mod tests {
 
     #[test]
     fn rules_set_selects() {
-        let rules: LRulesSet<(), char> = LRulesSet::new(vec![
+        let rules: LRulesSet<(), char> = vec![
             (1, Box::new(|_| vec!['a'])),
             (1, Box::new(|_| vec!['b'])),
             (1, Box::new(|_| vec!['c']))
-        ]);
+        ];
         let mut rng = thread_rng();
         for _ in 0..10 {
-            let result = rules.select(&(), &mut rng);
+            let result = select(&rules, &(), &mut rng);
             assert!(
                 result == ['a'] || result == ['b'] || result == ['c'],
                 "Result isn't a, b, or c: {:?}",
