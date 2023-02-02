@@ -1,4 +1,5 @@
 use anabaena::*;
+use std::collections::HashMap;
 use turtle::{Distance, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -12,22 +13,24 @@ enum SierpinskiAlphabet {
 fn main() {
     use SierpinskiAlphabet::*;
 
-    let rules: LRulesHash<(), SierpinskiAlphabet> = LRulesHash::from([
-        (
-            A,
-            LRulesQualified {
-                no_context: Some(vec![(1, Box::new(|_| vec![B, Right, A, Right, B]))]),
-                ..LRulesQualified::default()
-            },
-        ),
-        (
-            B,
-            LRulesQualified {
-                no_context: Some(vec![(1, Box::new(|_| vec![A, Left, B, Left, A]))]),
-                ..LRulesQualified::default()
-            },
-        ),
-    ]);
+    let rules: LRulesHash<(), SierpinskiAlphabet> = |_| {
+        HashMap::from([
+            (
+                A,
+                LRulesQualified {
+                    no_context: Some(vec![(1, vec![B, Right, A, Right, B])]),
+                    ..LRulesQualified::default()
+                },
+            ),
+            (
+                B,
+                LRulesQualified {
+                    no_context: Some(vec![(1, vec![A, Left, B, Left, A])]),
+                    ..LRulesQualified::default()
+                },
+            ),
+        ])
+    };
 
     let mut lsystem = LSystem {
         string: vec![A],

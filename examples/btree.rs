@@ -1,4 +1,5 @@
 use anabaena::*;
+use std::collections::HashMap;
 use turtle::{Angle, Distance, Point, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -10,36 +11,33 @@ enum BTreeAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), BTreeAlphabet> = LRulesHash::from([
-        (
-            BTreeAlphabet::Line,
-            LRulesQualified {
-                no_context: Some(vec![(
-                    1,
-                    Box::new(|_| vec![BTreeAlphabet::Line, BTreeAlphabet::Line]),
-                )]),
-                ..LRulesQualified::default()
-            },
-        ),
-        (
-            BTreeAlphabet::LineEndingInLeaf,
-            LRulesQualified {
-                no_context: Some(vec![(
-                    1,
-                    Box::new(|_| {
+    let rules: LRulesHash<(), BTreeAlphabet> = |_| {
+        HashMap::from([
+            (
+                BTreeAlphabet::Line,
+                LRulesQualified {
+                    no_context: Some(vec![(1, vec![BTreeAlphabet::Line, BTreeAlphabet::Line])]),
+                    ..LRulesQualified::default()
+                },
+            ),
+            (
+                BTreeAlphabet::LineEndingInLeaf,
+                LRulesQualified {
+                    no_context: Some(vec![(
+                        1,
                         vec![
                             BTreeAlphabet::Line,
                             BTreeAlphabet::LeftPush,
                             BTreeAlphabet::LineEndingInLeaf,
                             BTreeAlphabet::RightPop,
                             BTreeAlphabet::LineEndingInLeaf,
-                        ]
-                    }),
-                )]),
-                ..LRulesQualified::default()
-            },
-        ),
-    ]);
+                        ],
+                    )]),
+                    ..LRulesQualified::default()
+                },
+            ),
+        ])
+    };
 
     let mut lsystem = LSystem {
         string: vec![BTreeAlphabet::LineEndingInLeaf],

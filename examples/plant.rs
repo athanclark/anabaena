@@ -1,4 +1,5 @@
 use anabaena::*;
+use std::collections::HashMap;
 use turtle::{Angle, Distance, Point, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -14,30 +15,30 @@ enum PlantAlphabet {
 fn main() {
     use PlantAlphabet::*;
 
-    let rules: LRulesHash<(), PlantAlphabet> = LRulesHash::from([
-        (
-            X,
-            LRulesQualified {
-                no_context: Some(vec![(
-                    1,
-                    Box::new(|_| {
+    let rules: LRulesHash<(), PlantAlphabet> = |_| {
+        HashMap::from([
+            (
+                X,
+                LRulesQualified {
+                    no_context: Some(vec![(
+                        1,
                         vec![
                             F, Left, Push, Push, X, Pop, Right, X, Pop, Right, F, Push, Right, F,
                             X, Pop, Left, X,
-                        ]
-                    }),
-                )]),
-                ..LRulesQualified::default()
-            },
-        ),
-        (
-            F,
-            LRulesQualified {
-                no_context: Some(vec![(1, Box::new(|_| vec![F, F]))]),
-                ..LRulesQualified::default()
-            },
-        ),
-    ]);
+                        ],
+                    )]),
+                    ..LRulesQualified::default()
+                },
+            ),
+            (
+                F,
+                LRulesQualified {
+                    no_context: Some(vec![(1, vec![F, F])]),
+                    ..LRulesQualified::default()
+                },
+            ),
+        ])
+    };
 
     let mut lsystem = LSystem {
         string: vec![X],

@@ -1,4 +1,5 @@
 use anabaena::*;
+use std::collections::HashMap;
 use turtle::{Distance, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -9,12 +10,12 @@ enum KochAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), KochAlphabet> = LRulesHash::from([(
-        KochAlphabet::Forward,
-        LRulesQualified {
-            no_context: Some(vec![(
-                1,
-                Box::new(|_| {
+    let rules: LRulesHash<(), KochAlphabet> = |_| {
+        HashMap::from([(
+            KochAlphabet::Forward,
+            LRulesQualified {
+                no_context: Some(vec![(
+                    1,
                     vec![
                         KochAlphabet::Forward,
                         KochAlphabet::Left,
@@ -25,12 +26,12 @@ fn main() {
                         KochAlphabet::Forward,
                         KochAlphabet::Left,
                         KochAlphabet::Forward,
-                    ]
-                }),
-            )]),
-            ..LRulesQualified::default()
-        },
-    )]);
+                    ],
+                )]),
+                ..LRulesQualified::default()
+            },
+        )])
+    };
 
     let mut lsystem = LSystem {
         string: vec![KochAlphabet::Forward],

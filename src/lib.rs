@@ -10,36 +10,34 @@ extern crate quickcheck_macros;
 /// to the rest of the options, the more likely it will be selected (i.e., this set of production rules
 /// satisfies a [stochastic grammar](https://en.wikipedia.org/wiki/L-system#Stochastic_grammars)).
 ///
-/// `P` is the context used when generating a replacement string (`Vec<T>`).
-///
 /// As an example taken from [Wikipedia](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
 ///
 /// ```
 /// use anabaena::LRulesSet;
 ///
 /// // rule for the "A" character
-/// let algae_rules_a: LRulesSet<(), char> = vec![
-///     (1, Box::new(|_| vec!['A', 'B']))
+/// let algae_rules_a: LRulesSet<char> = vec![
+///     (1, vec!['A', 'B'])
 /// ];
 ///
 /// // rule for the "B" character
-/// let algae_rules_b: LRulesSet<(), char> = vec![
-///     (1, Box::new(|_| vec!['A']))
+/// let algae_rules_b: LRulesSet<char> = vec![
+///     (1, vec!['A'])
 /// ];
 /// ```
-///
-/// Note that both of these rule sets have a unitary (`()`) context (no context is computed on each L-System
-/// iteration), and the alphabet type they correspond to is `char`.
-pub type LRulesSet<P, T> = Vec<(u8, Box<dyn Fn(&P) -> Vec<T>>)>;
+pub type LRulesSet<T> = Vec<(u8, Vec<T>)>;
 
 /// Selects a result generator randomly, then applies the context.
-fn select<P, T>(options: &LRulesSet<P, T>, context: &P, rng: &mut ThreadRng) -> Vec<T> {
+fn select<T>(options: &LRulesSet<T>, rng: &mut ThreadRng) -> Vec<T>
+where
+    T: Clone,
+{
     let mut weights: Vec<u8> = vec![];
     for (w, _) in options.iter() {
         weights.push(*w);
     }
     let dist = WeightedIndex::new(&weights).unwrap();
-    (options[dist.sample(rng)].1)(context)
+    options[dist.sample(rng)].1.clone()
 }
 
 /// Qualifier for selecting a [LRulesSet](LRulesSet), where the neighbors of the token are known
@@ -170,17 +168,17 @@ impl<T> PredicateNeighbors<T> {
 /// ```
 /// use anabaena::{ExactNeighbors, LRulesSet, LRulesQualified};
 ///
-/// let mut rules: LRulesQualified<(), char> = LRulesQualified::new();
+/// let mut rules: LRulesQualified<char> = LRulesQualified::new();
 /// rules.exact_matches = vec![
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.before.insert(0, 'a'); // an 'a' character directly preceeds the selector
-///         (neighbors, vec![(1, Box::new(|_| vec!['a', 'a', 's']))])
+///         (neighbors, vec![(1, vec!['a', 'a', 's'])])
 ///     },
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.after.insert(0, 'b'); // a 'b' character directly follows the selector
-///         (neighbors, vec![(1, Box::new(|_| vec!['s', 'b', 'b']))])
+///         (neighbors, vec![(1, vec!['s', 'b', 'b'])])
 ///     }
 /// ];
 /// ```
@@ -190,16 +188,16 @@ impl<T> PredicateNeighbors<T> {
 /// expands to the other qualifiers `with_predicate` and `no_context` - the intent is to apply production
 /// rules with the order of "most specific" to "least specific", as [the Wikipedia article on context
 /// sensitive grammars details](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars).
-pub struct LRulesQualified<P, T> {
+pub struct LRulesQualified<T> {
     /// Matched first, as exact token matches with position relative to a selected token are most specific
-    pub exact_matches: Vec<(ExactNeighbors<T>, LRulesSet<P, T>)>,
+    pub exact_matches: Vec<(ExactNeighbors<T>, LRulesSet<T>)>,
     /// Matched second
-    pub with_predicate: Vec<(PredicateNeighbors<T>, LRulesSet<P, T>)>,
+    pub with_predicate: Vec<(PredicateNeighbors<T>, LRulesSet<T>)>,
     /// Matched last
-    pub no_context: Option<LRulesSet<P, T>>,
+    pub no_context: Option<LRulesSet<T>>,
 }
 
-impl<P, T> Default for LRulesQualified<P, T> {
+impl<T> Default for LRulesQualified<T> {
     fn default() -> Self {
         Self {
             exact_matches: vec![],
@@ -209,18 +207,18 @@ impl<P, T> Default for LRulesQualified<P, T> {
     }
 }
 
-impl<P, T> LRulesQualified<P, T> {
+impl<T> LRulesQualified<T> {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<P, T> LRulesQualified<P, T>
+impl<T> LRulesQualified<T>
 where
     T: PartialEq,
 {
     /// Gets the first production rule set given the context around a selected token
-    fn get_rules_set(&self, prefix: &[T], suffix: &[T]) -> Option<&LRulesSet<P, T>> {
+    fn get_rules_set(&self, prefix: &[T], suffix: &[T]) -> Option<&LRulesSet<T>> {
         for (e, r) in self.exact_matches.iter() {
             if e.is_valid(prefix, suffix) {
                 return Some(r);
@@ -256,13 +254,14 @@ pub trait ProductionRules<P, T> {
 ///
 /// ```
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
+/// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = LRulesHash::from([
+/// let rules: LRulesHash<(), char> = |_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
 ///            no_context: Some(vec![
-///                (1, Box::new(|_| vec!['A', 'B'])),
+///                (1, vec!['A', 'B']),
 ///            ]),
 ///            ..LRulesQualified::default()
 ///         }
@@ -271,18 +270,18 @@ pub trait ProductionRules<P, T> {
 ///         'B',
 ///         LRulesQualified {
 ///            no_context: Some(vec![
-///                (1, Box::new(|_| vec!['A'])),
+///                (1, vec!['A']),
 ///            ]),
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
 /// ]);
 /// ```
-pub type LRulesHash<P, T> = HashMap<T, LRulesQualified<P, T>>;
+pub type LRulesHash<P, T> = fn(&P) -> HashMap<T, LRulesQualified<T>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesHash<P, T>
 where
-    T: Hash + Eq,
+    T: Hash + Eq + Clone,
 {
     fn apply(
         &self,
@@ -292,7 +291,7 @@ where
         string: &[T],
         rng: &mut ThreadRng,
     ) -> Option<Vec<T>> {
-        self.get(&c).and_then(|rules| {
+        self(context).get(&c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
             let suffix = if suffix.is_empty() {
@@ -303,7 +302,7 @@ where
             };
             rules
                 .get_rules_set(prefix, suffix)
-                .map(|rules| select(rules, context, rng))
+                .map(|rules| select(rules, rng))
         })
     }
 }
@@ -316,19 +315,19 @@ where
 /// ```
 /// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesFunction<(), char> = |c| {
+/// let rules: LRulesFunction<(), char> = |_, c| {
 ///     match c {
 ///         'A' =>
 ///             Some(LRulesQualified {
 ///                no_context: Some(vec![
-///                    (1, Box::new(|_| vec!['A', 'B'])),
+///                    (1, vec!['A', 'B']),
 ///                ]),
 ///                ..LRulesQualified::default()
 ///             }),
 ///         'B' =>
 ///             Some(LRulesQualified {
 ///                no_context: Some(vec![
-///                    (1, Box::new(|_| vec!['A'])),
+///                    (1, vec!['A']),
 ///                ]),
 ///                ..LRulesQualified::default()
 ///             }),
@@ -336,11 +335,11 @@ where
 ///     }
 /// };
 /// ```
-pub type LRulesFunction<P, T> = fn(T) -> Option<LRulesQualified<P, T>>;
+pub type LRulesFunction<P, T> = fn(&P, T) -> Option<LRulesQualified<T>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T>
 where
-    T: PartialEq,
+    T: PartialEq + Clone,
 {
     fn apply(
         &self,
@@ -350,7 +349,7 @@ where
         string: &[T],
         rng: &mut ThreadRng,
     ) -> Option<Vec<T>> {
-        self(c).and_then(|rules| {
+        self(context, c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
             let suffix = if suffix.is_empty() {
@@ -361,7 +360,7 @@ where
             };
             rules
                 .get_rules_set(prefix, suffix)
-                .map(|rules| select(rules, context, rng))
+                .map(|rules| select(rules, rng))
         })
     }
 }
@@ -374,7 +373,7 @@ where
 /// [the Wikipedia article on Parametric grammars](https://en.wikipedia.org/wiki/L-system#Parametric_grammars).
 ///
 /// Furthermore, each iteration of the L-System can develop and share a "contextual state" `P`, to be used
-/// in the production rules when generating more tokens. It's a stateful value, and can be used to track
+/// however you'd like when generating more tokens. It's a stateful value, and can be used to track
 /// concepts like age of the L-System, or pre-process the previous iteration's tokens to make production
 /// rules more efficient.
 ///
@@ -390,13 +389,14 @@ where
 ///
 /// ```
 /// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
+/// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = LRulesHash::from([
+/// let rules: LRulesHash<(), char> = |_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
 ///            no_context: Some(vec![
-///                (1, Box::new(|_| vec!['A', 'B'])),
+///                (1, vec!['A', 'B']),
 ///            ]),
 ///            ..LRulesQualified::default()
 ///         }
@@ -405,7 +405,7 @@ where
 ///         'B',
 ///         LRulesQualified {
 ///            no_context: Some(vec![
-///                (1, Box::new(|_| vec!['A'])),
+///                (1, vec!['A']),
 ///            ]),
 ///            ..LRulesQualified::default()
 ///         }
@@ -465,7 +465,7 @@ where
                     None => vec![c],
                     Some(replacement) => {
                         applied = true;
-                        replacement
+                        replacement.to_vec()
                     }
                 }
             })
@@ -487,14 +487,10 @@ mod tests {
 
     #[test]
     fn rules_set_selects() {
-        let rules: LRulesSet<(), char> = vec![
-            (1, Box::new(|_| vec!['a'])),
-            (1, Box::new(|_| vec!['b'])),
-            (1, Box::new(|_| vec!['c'])),
-        ];
+        let rules: LRulesSet<char> = vec![(1, vec!['a']), (1, vec!['b']), (1, vec!['c'])];
         let mut rng = thread_rng();
         for _ in 0..10 {
-            let result = select(&rules, &(), &mut rng);
+            let result = select(&rules, &mut rng);
             assert!(
                 result == ['a'] || result == ['b'] || result == ['c'],
                 "Result isn't a, b, or c: {:?}",
