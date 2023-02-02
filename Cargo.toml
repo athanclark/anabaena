@@ -9,6 +9,7 @@ repository = "https://github.com/athanclark/anabaena"
 license = "BSD-3-Clause"
 keywords = ["lsystem", "generator", "alphabet"]
 categories = ["simulation"]
+exclude = ["shell.nix"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
