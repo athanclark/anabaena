@@ -13,7 +13,7 @@ enum SierpinskiAlphabet {
 fn main() {
     use SierpinskiAlphabet::*;
 
-    let rules: LRulesHash<(), SierpinskiAlphabet> = |_| {
+    let rules: LRulesHash<(), SierpinskiAlphabet> = Box::new(|_| {
         HashMap::from([
             (
                 F,
@@ -30,7 +30,7 @@ fn main() {
                 },
             ),
         ])
-    };
+    });
 
     let mut lsystem = LSystem {
         string: vec![F],

@@ -11,7 +11,7 @@ enum BTreeAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), BTreeAlphabet> = |_| {
+    let rules: LRulesHash<(), BTreeAlphabet> = Box::new(|_| {
         HashMap::from([
             (
                 BTreeAlphabet::Line,
@@ -37,7 +37,7 @@ fn main() {
                 },
             ),
         ])
-    };
+    });
 
     let mut lsystem = LSystem {
         string: vec![BTreeAlphabet::LineEndingInLeaf],

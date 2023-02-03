@@ -238,7 +238,7 @@ where
 /// Trait that allows different implementations of matching a specific token to their production rules
 pub trait ProductionRules<P, T> {
     fn apply(
-        &self,
+        &mut self,
         context: &mut P,
         token: T,
         index: usize,
@@ -256,7 +256,7 @@ pub trait ProductionRules<P, T> {
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = |_| HashMap::from([
+/// let rules: LRulesHash<(), char> = Box::new(|_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
@@ -275,16 +275,16 @@ pub trait ProductionRules<P, T> {
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
-/// ]);
+/// ]));
 /// ```
-pub type LRulesHash<P, T> = fn(&mut P) -> HashMap<T, LRulesQualified<T>>;
+pub type LRulesHash<P, T> = Box<dyn FnMut(&mut P) -> HashMap<T, LRulesQualified<T>>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesHash<P, T>
 where
     T: Hash + Eq + Clone,
 {
     fn apply(
-        &self,
+        &mut self,
         context: &mut P,
         c: T,
         i: usize,
@@ -315,7 +315,7 @@ where
 /// ```
 /// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesFunction<(), char> = |_, c| {
+/// let rules: LRulesFunction<(), char> = Box::new(|_, c| {
 ///     match c {
 ///         'A' =>
 ///             Some(LRulesQualified {
@@ -333,16 +333,16 @@ where
 ///             }),
 ///         _ => None,
 ///     }
-/// };
+/// });
 /// ```
-pub type LRulesFunction<P, T> = fn(&mut P, T) -> Option<LRulesQualified<T>>;
+pub type LRulesFunction<P, T> = Box<dyn FnMut(&mut P, T) -> Option<LRulesQualified<T>>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T>
 where
     T: PartialEq + Clone,
 {
     fn apply(
-        &self,
+        &mut self,
         context: &mut P,
         c: T,
         i: usize,
@@ -391,7 +391,7 @@ where
 /// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = |_| HashMap::from([
+/// let rules: LRulesHash<(), char> = Box::new(|_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
@@ -410,7 +410,7 @@ where
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
-/// ]);
+/// ]));
 ///
 /// let axiom: Vec<char> = vec!['A'];
 ///
