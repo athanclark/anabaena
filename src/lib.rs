@@ -368,6 +368,40 @@ where
     }
 }
 
+/// Exact match of tokens to a set of production rules via a function, also including the token's index
+/// in the string being processed. Note that this is the index of the token during the current iteration
+/// of production rules, and the indicies won't update until the next iteration of the L-System.
+pub type LRulesFunctionWithIndex<P, T> =
+    Box<dyn FnMut(&mut P, T, usize) -> Option<LRulesQualified<T>>>;
+
+impl<P, T> ProductionRules<P, T> for LRulesFunctionWithIndex<P, T>
+where
+    T: PartialEq + Clone,
+{
+    fn apply(
+        &mut self,
+        context: &mut P,
+        c: T,
+        i: usize,
+        string: &[T],
+        rng: &mut ThreadRng,
+    ) -> Option<Vec<T>> {
+        self(context, c, i).and_then(|rules| {
+            let (prefix, suffix) = string.split_at(i);
+            // drop token that matched `c`
+            let suffix = if suffix.is_empty() {
+                suffix
+            } else {
+                let (_, suffix) = suffix.split_at(1);
+                suffix
+            };
+            rules
+                .get_rules_set(prefix, suffix)
+                .map(|rules| select(rules, rng))
+        })
+    }
+}
+
 /// Consists of the current string of tokens, and the rules applied to it.
 /// Represents a running state, stepped as an Iterator.
 ///
@@ -501,7 +535,7 @@ pub struct LSystemSelective<R, P, T> {
     /// Fetch the indicies to perform the production rules
     pub get_indicies: Box<GetIndicies<P>>,
     /// Update the indicies stored in `P` to a new offset (a previous index was replaced by either a
-    /// production greater than length 1, or 0).
+    /// production greater than length 1, or 0). This is run on the result of every production rule.
     pub update_indicies: Box<UpdateIndicies<P>>,
 }
 
@@ -532,12 +566,11 @@ where
         let mut applied = false;
 
         let indicies = (self.get_indicies)(&self.context);
-        let mut cumulative_offset: i64 = 0;
 
         let mut new_string: Vec<Vec<T>> =
             self.string.clone().into_iter().map(|c| vec![c]).collect();
         for i in indicies {
-            if let Some(c) = new_string.get_mut((i as i64 + cumulative_offset) as usize) {
+            if let Some(c) = new_string.get_mut(i) {
                 if let Some(replacement) =
                     self.rules
                         .apply(&mut self.context, c[0].clone(), i, &self.string, &mut rng)
@@ -546,11 +579,6 @@ where
                     let l = replacement.len();
                     *c = replacement;
                     if !l == 1 {
-                        if l == 0 {
-                            cumulative_offset -= 1;
-                        } else {
-                            cumulative_offset += l as i64 - 1;
-                        }
                         let offset: usize = if l == 0 { 0 } else { l - 1 };
                         (self.update_indicies)(&mut self.context, i + 1, offset)
                     }
@@ -558,25 +586,6 @@ where
             }
         }
         let new_string: Vec<T> = new_string.into_iter().flatten().collect();
-
-        // let new_string: Vec<T> = self
-        //     .string
-        //     .clone()
-        //     .into_iter()
-        //     .enumerate()
-        //     .flat_map(|(i, c)| {
-        //         match self
-        //             .rules
-        //             .apply(&mut self.context, c.clone(), i, &self.string, &mut rng)
-        //         {
-        //             None => vec![c],
-        //             Some(replacement) => {
-        //                 applied = true;
-        //                 replacement.to_vec()
-        //             }
-        //         }
-        //     })
-        //     .collect();
 
         if applied {
             self.string = new_string.clone();
