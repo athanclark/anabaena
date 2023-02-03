@@ -552,6 +552,9 @@ pub type GetIndicies<P> = fn(&P) -> BTreeSet<usize>;
 /// Furthermore, an offset value of `0` indicates
 /// that the indicies should be reduced by `1`. All other values indicate the offset should be increased by
 /// that very value - i.e. a offset of `1` indicates the indicies should be increased by `1`.
+/// It is also expected that any modifications to the context during the production rule respect the
+/// new indicies without having to be compensated for - this function should only affect tokens
+/// whose indicies are _after_ the last element of the vector produced by the production rule.
 pub type UpdateIndicies<P> = fn(&mut P, usize, usize);
 
 impl<R, P, T> Iterator for LSystemSelective<R, P, T>
@@ -580,7 +583,7 @@ where
                     *c = replacement;
                     if !l == 1 {
                         let offset: usize = if l == 0 { 0 } else { l - 1 };
-                        (self.update_indicies)(&mut self.context, i + 1, offset)
+                        (self.update_indicies)(&mut self.context, i + l, offset)
                     }
                 }
             }
