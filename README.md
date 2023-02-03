@@ -9,6 +9,8 @@ L-System (Lindenmayer system) for Rust.
 - Support for [stochastic grammars](https://en.wikipedia.org/wiki/L-system#Stochastic_grammars)
 - Support for [context sensitive grammars](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars)
 - Support for [parametric grammars](https://en.wikipedia.org/wiki/L-system#Parametric_grammars)
+- Mutable context support during individual production rules, and summarized after a round is complete
+- Generic production rule selection
 
 ## Examples
 

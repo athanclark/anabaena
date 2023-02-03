@@ -484,6 +484,82 @@ where
     }
 }
 
+/// Similarly to the [LSystem](LSystem), this operates as an iterator, however, the exact indicies in which
+/// the production rules are to be performed are derived from the context.
+pub struct LSystemSelective<R, P, T> {
+    /// The current token string - set this to an initial value (i.e., the _axiom_) when creating your L-System
+    pub string: Vec<T>,
+    /// The production rules applied to the string
+    pub rules: R,
+    /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
+    pub context: P,
+    /// Performed _after_ all production rules have been applied
+    pub mut_context: Box<MutContext<P, T>>,
+    /// Fetch the indicies to perform the production rules
+    pub get_indicies: Box<GetIndicies<P>>,
+}
+
+/// Used to generate the next contextual type `P` from the previous context, and previous string
+/// of tokens `&[T]`.
+pub type GetIndicies<P> = fn(&P) -> Vec<usize>;
+
+impl<R, P, T> Iterator for LSystemSelective<R, P, T>
+where
+    T: PartialEq + Clone,
+    R: ProductionRules<P, T>,
+{
+    type Item = Vec<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut rng = thread_rng();
+        let mut applied = false;
+
+        let indicies = (self.get_indicies)(&self.context);
+
+        let mut new_string: Vec<Vec<T>> =
+            self.string.clone().into_iter().map(|c| vec![c]).collect();
+        for i in indicies {
+            if let Some(c) = new_string.get_mut(i) {
+                if let Some(replacement) =
+                    self.rules
+                        .apply(&mut self.context, c[0].clone(), i, &self.string, &mut rng)
+                {
+                    applied = true;
+                    *c = replacement;
+                }
+            }
+        }
+        let new_string: Vec<T> = new_string.into_iter().flatten().collect();
+
+        // let new_string: Vec<T> = self
+        //     .string
+        //     .clone()
+        //     .into_iter()
+        //     .enumerate()
+        //     .flat_map(|(i, c)| {
+        //         match self
+        //             .rules
+        //             .apply(&mut self.context, c.clone(), i, &self.string, &mut rng)
+        //         {
+        //             None => vec![c],
+        //             Some(replacement) => {
+        //                 applied = true;
+        //                 replacement.to_vec()
+        //             }
+        //         }
+        //     })
+        //     .collect();
+
+        if applied {
+            self.string = new_string.clone();
+            (self.mut_context)(&mut self.context, &self.string);
+            Some(new_string)
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -532,5 +608,70 @@ mod tests {
             },
         };
         exact_neighbors.is_valid(prefix, suffix)
+    }
+
+    #[test]
+    fn selective_has_same_results_as_normal_forall_indicies() {
+        let axiom: Vec<char> = vec!['A'];
+
+        let mut lsystem: LSystem<LRulesHash<(), char>, (), char> = LSystem {
+            string: axiom.clone(),
+            rules: Box::new(|_| {
+                HashMap::from([
+                    (
+                        'A',
+                        LRulesQualified {
+                            no_context: Some(vec![(1, vec!['A', 'B'])]),
+                            ..LRulesQualified::default()
+                        },
+                    ),
+                    (
+                        'B',
+                        LRulesQualified {
+                            no_context: Some(vec![(1, vec!['A'])]),
+                            ..LRulesQualified::default()
+                        },
+                    ),
+                ])
+            }),
+            context: (),
+            mut_context: Box::new(|_, _| {}),
+        };
+
+        let mut lsystem_selective: LSystemSelective<LRulesHash<usize, char>, usize, char> =
+            LSystemSelective {
+                string: axiom.clone(),
+                rules: Box::new(|_| {
+                    HashMap::from([
+                        (
+                            'A',
+                            LRulesQualified {
+                                no_context: Some(vec![(1, vec!['A', 'B'])]),
+                                ..LRulesQualified::default()
+                            },
+                        ),
+                        (
+                            'B',
+                            LRulesQualified {
+                                no_context: Some(vec![(1, vec!['A'])]),
+                                ..LRulesQualified::default()
+                            },
+                        ),
+                    ])
+                }),
+                context: axiom.len(),
+                mut_context: Box::new(|ctx, ts| {
+                    *ctx = ts.len();
+                }),
+                get_indicies: Box::new(|ctx| (0..*ctx).collect()),
+            };
+
+        for _ in 0..7 {
+            if lsystem.next() != lsystem_selective.next() {
+                assert!(false, "LSystems aren't equal");
+            }
+        }
+
+        assert!(true);
     }
 }
