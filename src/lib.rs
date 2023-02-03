@@ -1,5 +1,8 @@
 use rand::{distributions::WeightedIndex, prelude::*};
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{BTreeSet, HashMap},
+    hash::Hash,
+};
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -497,11 +500,25 @@ pub struct LSystemSelective<R, P, T> {
     pub mut_context: Box<MutContext<P, T>>,
     /// Fetch the indicies to perform the production rules
     pub get_indicies: Box<GetIndicies<P>>,
+    /// Update the indicies stored in `P` to a new offset (a previous index was replaced by either a
+    /// production greater than length 1, or 0).
+    pub update_indicies: Box<UpdateIndicies<P>>,
 }
 
 /// Used to generate the next contextual type `P` from the previous context, and previous string
 /// of tokens `&[T]`.
-pub type GetIndicies<P> = fn(&P) -> Vec<usize>;
+pub type GetIndicies<P> = fn(&P) -> BTreeSet<usize>;
+
+/// Update `P` to reflect the change in indicies by some constant offset. The order of arguments is:
+///
+/// 1. Mutable context `P`
+/// 2. Indicies greater than or equal to this index are affected
+/// 3. Offset to apply
+///
+/// Furthermore, an offset value of `0` indicates
+/// that the indicies should be reduced by `1`. All other values indicate the offset should be increased by
+/// that very value - i.e. a offset of `1` indicates the indicies should be increased by `1`.
+pub type UpdateIndicies<P> = fn(&mut P, usize, usize);
 
 impl<R, P, T> Iterator for LSystemSelective<R, P, T>
 where
@@ -515,17 +532,28 @@ where
         let mut applied = false;
 
         let indicies = (self.get_indicies)(&self.context);
+        let mut cumulative_offset: i64 = 0;
 
         let mut new_string: Vec<Vec<T>> =
             self.string.clone().into_iter().map(|c| vec![c]).collect();
         for i in indicies {
-            if let Some(c) = new_string.get_mut(i) {
+            if let Some(c) = new_string.get_mut((i as i64 + cumulative_offset) as usize) {
                 if let Some(replacement) =
                     self.rules
                         .apply(&mut self.context, c[0].clone(), i, &self.string, &mut rng)
                 {
                     applied = true;
+                    let l = replacement.len();
                     *c = replacement;
+                    if !l == 1 {
+                        if l == 0 {
+                            cumulative_offset -= 1;
+                        } else {
+                            cumulative_offset += l as i64 - 1;
+                        }
+                        let offset: usize = if l == 0 { 0 } else { l - 1 };
+                        (self.update_indicies)(&mut self.context, i + 1, offset)
+                    }
                 }
             }
         }
@@ -664,9 +692,16 @@ mod tests {
                     *ctx = ts.len();
                 }),
                 get_indicies: Box::new(|ctx| (0..*ctx).collect()),
+                update_indicies: Box::new(|ctx, _i, offset| {
+                    if offset == 0 {
+                        *ctx -= 1;
+                    } else {
+                        *ctx += offset;
+                    }
+                }),
             };
 
-        for _ in 0..7 {
+        for _ in 0..20 {
             if lsystem.next() != lsystem_selective.next() {
                 assert!(false, "LSystems aren't equal");
             }
