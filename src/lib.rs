@@ -239,7 +239,7 @@ where
 pub trait ProductionRules<P, T> {
     fn apply(
         &self,
-        context: &P,
+        context: &mut P,
         token: T,
         index: usize,
         string: &[T],
@@ -277,7 +277,7 @@ pub trait ProductionRules<P, T> {
 ///     )
 /// ]);
 /// ```
-pub type LRulesHash<P, T> = fn(&P) -> HashMap<T, LRulesQualified<T>>;
+pub type LRulesHash<P, T> = fn(&mut P) -> HashMap<T, LRulesQualified<T>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesHash<P, T>
 where
@@ -285,7 +285,7 @@ where
 {
     fn apply(
         &self,
-        context: &P,
+        context: &mut P,
         c: T,
         i: usize,
         string: &[T],
@@ -335,7 +335,7 @@ where
 ///     }
 /// };
 /// ```
-pub type LRulesFunction<P, T> = fn(&P, T) -> Option<LRulesQualified<T>>;
+pub type LRulesFunction<P, T> = fn(&mut P, T) -> Option<LRulesQualified<T>>;
 
 impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T>
 where
@@ -343,7 +343,7 @@ where
 {
     fn apply(
         &self,
-        context: &P,
+        context: &mut P,
         c: T,
         i: usize,
         string: &[T],
@@ -418,7 +418,7 @@ where
 ///     string: axiom,
 ///     rules,
 ///     context: (),
-///     mk_context: Box::new(|_, _| ()),
+///     mut_context: Box::new(|_, _| {}),
 /// };
 ///
 /// assert_eq!(lsystem.next(), Some("AB".chars().collect()));
@@ -430,15 +430,19 @@ where
 /// assert_eq!(lsystem.next(), Some("ABAABABAABAABABAABABAABAABABAABAAB".chars().collect()));
 /// ```
 pub struct LSystem<R, P, T> {
+    /// The current token string - set this to an initial value (i.e., the _axiom_) when creating your L-System
     pub string: Vec<T>,
+    /// The production rules applied to the string
     pub rules: R,
+    /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
     pub context: P,
-    pub mk_context: Box<NextContext<P, T>>,
+    /// Performed _after_ all production rules have been applied
+    pub mut_context: Box<MutContext<P, T>>,
 }
 
 /// Used to generate the next contextual type `P` from the previous context, and previous string
 /// of tokens `&[T]`.
-pub type NextContext<P, T> = fn(&P, &[T]) -> P;
+pub type MutContext<P, T> = fn(&mut P, &[T]);
 
 impl<R, P, T> Iterator for LSystem<R, P, T>
 where
@@ -451,7 +455,6 @@ where
         let mut rng = thread_rng();
         let mut applied = false;
 
-        let new_context: P = (self.mk_context)(&self.context, &self.string);
         let new_string: Vec<T> = self
             .string
             .clone()
@@ -460,7 +463,7 @@ where
             .flat_map(|(i, c)| {
                 match self
                     .rules
-                    .apply(&new_context, c.clone(), i, &self.string, &mut rng)
+                    .apply(&mut self.context, c.clone(), i, &self.string, &mut rng)
                 {
                     None => vec![c],
                     Some(replacement) => {
@@ -473,7 +476,7 @@ where
 
         if applied {
             self.string = new_string.clone();
-            self.context = new_context;
+            (self.mut_context)(&mut self.context, &self.string);
             Some(new_string)
         } else {
             None

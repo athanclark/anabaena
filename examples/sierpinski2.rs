@@ -36,7 +36,7 @@ fn main() {
         string: vec![A],
         rules,
         context: (),
-        mk_context: Box::new(|_, _| ()),
+        mut_context: Box::new(|_, _| {}),
     };
 
     let set = lsystem.nth(6).unwrap();

@@ -1,6 +1,6 @@
 [package]
 name = "anabaena"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Athan Clark <athan.clark@gmail.com>"]
 edition = "2021"
 description = "L-System (Lindenmayer system) framework for Rust"
