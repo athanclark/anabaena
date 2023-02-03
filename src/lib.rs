@@ -702,9 +702,14 @@ mod tests {
             };
 
         for _ in 0..20 {
-            if lsystem.next() != lsystem_selective.next() {
-                assert!(false, "LSystems aren't equal");
-            }
+            let x = lsystem.next();
+            let y = lsystem_selective.next();
+            assert_eq!(x, y, "LSystems aren't equal");
+            assert_eq!(
+                lsystem_selective.context,
+                lsystem_selective.string.len(),
+                "context and string length aren't equal."
+            );
         }
 
         assert!(true);
