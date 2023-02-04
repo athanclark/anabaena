@@ -579,11 +579,11 @@ where
                         .apply(&mut self.context, c[0].clone(), i, &self.string, &mut rng)
                 {
                     applied = true;
-                    let l = replacement.len();
+                    let l = (*replacement).len();
                     *c = replacement;
                     if !l == 1 {
                         let offset: usize = if l == 0 { 0 } else { l - 1 };
-                        (self.update_indicies)(&mut self.context, i + l, offset)
+                        (self.update_indicies)(&mut self.context, i + 1, offset)
                     }
                 }
             }
