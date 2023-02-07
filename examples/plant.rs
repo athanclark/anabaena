@@ -15,25 +15,25 @@ enum PlantAlphabet {
 fn main() {
     use PlantAlphabet::*;
 
-    let rules: LRulesHash<(), PlantAlphabet> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = Box::new(|_| {
         HashMap::from([
             (
                 X,
                 LRulesQualified {
-                    no_context: Some(vec![(
+                    no_context: Some(LRulesSet::new(vec![(
                         1,
                         vec![
                             F, Left, Push, Push, X, Pop, Right, X, Pop, Right, F, Push, Right, F,
                             X, Pop, Left, X,
                         ],
-                    )]),
+                    )])),
                     ..LRulesQualified::default()
                 },
             ),
             (
                 F,
                 LRulesQualified {
-                    no_context: Some(vec![(1, vec![F, F])]),
+                    no_context: Some(LRulesSet::new(vec![(1, vec![F, F])])),
                     ..LRulesQualified::default()
                 },
             ),

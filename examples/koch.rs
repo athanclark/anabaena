@@ -10,11 +10,11 @@ enum KochAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), KochAlphabet> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = Box::new(|_| {
         HashMap::from([(
             KochAlphabet::Forward,
             LRulesQualified {
-                no_context: Some(vec![(
+                no_context: Some(LRulesSet::new(vec![(
                     1,
                     vec![
                         KochAlphabet::Forward,
@@ -27,7 +27,7 @@ fn main() {
                         KochAlphabet::Left,
                         KochAlphabet::Forward,
                     ],
-                )]),
+                )])),
                 ..LRulesQualified::default()
             },
         )])

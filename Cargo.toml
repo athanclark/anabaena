@@ -19,6 +19,7 @@ js = ["dep:getrandom"]
 [dependencies]
 getrandom = { version = "0.2.8", optional = true, features = ["js"] }
 rand = "0.8.5"
+streaming-iterator = "0.1.9"
 
 [dev-dependencies]
 quickcheck = "1.0.3"

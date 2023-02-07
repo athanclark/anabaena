@@ -3,6 +3,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     hash::Hash,
 };
+use streaming_iterator::StreamingIterator;
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -19,28 +20,31 @@ extern crate quickcheck_macros;
 /// use anabaena::LRulesSet;
 ///
 /// // rule for the "A" character
-/// let algae_rules_a: LRulesSet<char> = vec![
+/// let algae_rules_a: LRulesSet<char> = LRulesSet::new(vec![
 ///     (1, vec!['A', 'B'])
-/// ];
+/// ]);
 ///
 /// // rule for the "B" character
-/// let algae_rules_b: LRulesSet<char> = vec![
+/// let algae_rules_b: LRulesSet<char> = LRulesSet::new(vec![
 ///     (1, vec!['A'])
-/// ];
+/// ]);
 /// ```
-pub type LRulesSet<T> = Vec<(u8, Vec<T>)>;
+pub struct LRulesSet<T>(Vec<(u8, Vec<T>)>);
 
-/// Selects a result generator randomly, then applies the context.
-fn select<T>(options: &LRulesSet<T>, rng: &mut ThreadRng) -> Vec<T>
-where
-    T: Clone,
-{
-    let mut weights: Vec<u8> = vec![];
-    for (w, _) in options.iter() {
-        weights.push(*w);
+impl<T> LRulesSet<T> {
+    pub fn new(options: Vec<(u8, Vec<T>)>) -> Self {
+        Self(options)
     }
-    let dist = WeightedIndex::new(&weights).unwrap();
-    options[dist.sample(rng)].1.clone()
+
+    /// Selects a result generator randomly, then applies the context.
+    fn select<'a, 'b>(&'a self, rng: &'b mut ThreadRng) -> &'a [T] {
+        let mut weights: Vec<u8> = vec![];
+        for (w, _) in self.0.iter() {
+            weights.push(*w);
+        }
+        let dist = WeightedIndex::new(&weights).unwrap();
+        &self.0[dist.sample(rng)].1
+    }
 }
 
 /// Qualifier for selecting a [LRulesSet](LRulesSet), where the neighbors of the token are known
@@ -176,12 +180,12 @@ impl<T> PredicateNeighbors<T> {
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.before.insert(0, 'a'); // an 'a' character directly preceeds the selector
-///         (neighbors, vec![(1, vec!['a', 'a', 's'])])
+///         (neighbors, LRulesSet::new(vec![(1, vec!['a', 'a', 's'])]))
 ///     },
 ///     {
 ///         let mut neighbors = ExactNeighbors::new();
 ///         neighbors.after.insert(0, 'b'); // a 'b' character directly follows the selector
-///         (neighbors, vec![(1, vec!['s', 'b', 'b'])])
+///         (neighbors, LRulesSet::new(vec![(1, vec!['s', 'b', 'b'])]))
 ///     }
 /// ];
 /// ```
@@ -238,12 +242,22 @@ where
     }
 }
 
-/// Trait that allows different implementations of matching a specific token to their production rules
 pub trait ProductionRules<P, T> {
     fn apply(
         &mut self,
         context: &mut P,
-        token: T,
+        token: &T,
+        index: usize,
+        rng: &mut ThreadRng,
+    ) -> Option<Vec<T>>;
+}
+
+/// Trait that allows different implementations of matching a specific token to their production rules
+pub trait QualifiedProductionRules<P, T> {
+    fn apply_qualified(
+        &mut self,
+        context: &mut P,
+        token: &T,
         index: usize,
         string: &[T],
         rng: &mut ThreadRng,
@@ -259,42 +273,51 @@ pub trait ProductionRules<P, T> {
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = Box::new(|_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesQualified<char>> = Box::new(|_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
-///            no_context: Some(vec![
+///            no_context: Some(LRulesSet::new(vec![
 ///                (1, vec!['A', 'B']),
-///            ]),
+///            ])),
 ///            ..LRulesQualified::default()
 ///         }
 ///     ),
 ///     (
 ///         'B',
 ///         LRulesQualified {
-///            no_context: Some(vec![
+///            no_context: Some(LRulesSet::new(vec![
 ///                (1, vec!['A']),
-///            ]),
+///            ])),
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
 /// ]));
 /// ```
-pub type LRulesHash<P, T> = Box<dyn FnMut(&mut P) -> HashMap<T, LRulesQualified<T>>>;
+pub type LRulesHash<P, T, Q> = Box<dyn FnMut(&mut P) -> HashMap<T, Q>>;
 
-impl<P, T> ProductionRules<P, T> for LRulesHash<P, T>
+impl<P, T> ProductionRules<P, T> for LRulesHash<P, T, LRulesSet<T>>
 where
     T: Hash + Eq + Clone,
 {
-    fn apply(
+    fn apply(&mut self, context: &mut P, c: &T, _i: usize, rng: &mut ThreadRng) -> Option<Vec<T>> {
+        self(context).get(c).map(|rules| rules.select(rng).to_vec())
+    }
+}
+
+impl<P, T> QualifiedProductionRules<P, T> for LRulesHash<P, T, LRulesQualified<T>>
+where
+    T: Hash + Eq + Clone,
+{
+    fn apply_qualified<'a>(
         &mut self,
         context: &mut P,
-        c: T,
+        c: &T,
         i: usize,
         string: &[T],
         rng: &mut ThreadRng,
     ) -> Option<Vec<T>> {
-        self(context).get(&c).and_then(|rules| {
+        self(context).get(c).and_then(|rules| {
             let (prefix, suffix) = string.split_at(i);
             // drop token that matched `c`
             let suffix = if suffix.is_empty() {
@@ -305,7 +328,7 @@ where
             };
             rules
                 .get_rules_set(prefix, suffix)
-                .map(|rules| select(rules, rng))
+                .map(|rules| rules.select(rng).to_vec())
         })
     }
 }
@@ -318,36 +341,45 @@ where
 /// ```
 /// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesFunction<(), char> = Box::new(|_, c| {
+/// let rules: LRulesFunction<(), char, LRulesQualified<char>> = Box::new(|_, c| {
 ///     match c {
 ///         'A' =>
 ///             Some(LRulesQualified {
-///                no_context: Some(vec![
+///                no_context: Some(LRulesSet::new(vec![
 ///                    (1, vec!['A', 'B']),
-///                ]),
+///                ])),
 ///                ..LRulesQualified::default()
 ///             }),
 ///         'B' =>
 ///             Some(LRulesQualified {
-///                no_context: Some(vec![
+///                no_context: Some(LRulesSet::new(vec![
 ///                    (1, vec!['A']),
-///                ]),
+///                ])),
 ///                ..LRulesQualified::default()
 ///             }),
 ///         _ => None,
 ///     }
 /// });
 /// ```
-pub type LRulesFunction<P, T> = Box<dyn FnMut(&mut P, T) -> Option<LRulesQualified<T>>>;
+pub type LRulesFunction<P, T, Q> = Box<dyn FnMut(&mut P, &T) -> Option<Q>>;
 
-impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T>
+impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T, LRulesSet<T>>
+where
+    T: Clone,
+{
+    fn apply(&mut self, context: &mut P, c: &T, _i: usize, rng: &mut ThreadRng) -> Option<Vec<T>> {
+        self(context, c).map(|rules| rules.select(rng).to_vec())
+    }
+}
+
+impl<P, T> QualifiedProductionRules<P, T> for LRulesFunction<P, T, LRulesQualified<T>>
 where
     T: PartialEq + Clone,
 {
-    fn apply(
+    fn apply_qualified(
         &mut self,
         context: &mut P,
-        c: T,
+        c: &T,
         i: usize,
         string: &[T],
         rng: &mut ThreadRng,
@@ -363,7 +395,7 @@ where
             };
             rules
                 .get_rules_set(prefix, suffix)
-                .map(|rules| select(rules, rng))
+                .map(|rules| rules.select(rng).to_vec())
         })
     }
 }
@@ -371,17 +403,25 @@ where
 /// Exact match of tokens to a set of production rules via a function, also including the token's index
 /// in the string being processed. Note that this is the index of the token during the current iteration
 /// of production rules, and the indicies won't update until the next iteration of the L-System.
-pub type LRulesFunctionWithIndex<P, T> =
-    Box<dyn FnMut(&mut P, T, usize) -> Option<LRulesQualified<T>>>;
+pub type LRulesFunctionWithIndex<P, T, Q> = Box<dyn FnMut(&mut P, &T, usize) -> Option<Q>>;
 
-impl<P, T> ProductionRules<P, T> for LRulesFunctionWithIndex<P, T>
+impl<P, T> ProductionRules<P, T> for LRulesFunctionWithIndex<P, T, LRulesSet<T>>
+where
+    T: Clone,
+{
+    fn apply(&mut self, context: &mut P, c: &T, i: usize, rng: &mut ThreadRng) -> Option<Vec<T>> {
+        self(context, c, i).map(|rules| rules.select(rng).to_vec())
+    }
+}
+
+impl<P, T> QualifiedProductionRules<P, T> for LRulesFunctionWithIndex<P, T, LRulesQualified<T>>
 where
     T: PartialEq + Clone,
 {
-    fn apply(
+    fn apply_qualified(
         &mut self,
         context: &mut P,
-        c: T,
+        c: &T,
         i: usize,
         string: &[T],
         rng: &mut ThreadRng,
@@ -397,7 +437,7 @@ where
             };
             rules
                 .get_rules_set(prefix, suffix)
-                .map(|rules| select(rules, rng))
+                .map(|rules| rules.select(rng).to_vec())
         })
     }
 }
@@ -428,22 +468,22 @@ where
 /// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char> = Box::new(|_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesQualified<char>> = Box::new(|_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
-///            no_context: Some(vec![
+///            no_context: Some(LRulesSet::new(vec![
 ///                (1, vec!['A', 'B']),
-///            ]),
+///            ])),
 ///            ..LRulesQualified::default()
 ///         }
 ///     ),
 ///     (
 ///         'B',
 ///         LRulesQualified {
-///            no_context: Some(vec![
+///            no_context: Some(LRulesSet::new(vec![
 ///                (1, vec!['A']),
-///            ]),
+///            ])),
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
@@ -481,10 +521,12 @@ pub struct LSystem<R, P, T> {
 /// of tokens `&[T]`.
 pub type MutContext<P, T> = fn(&mut P, &[T]);
 
+// FIXME increase efficiency of this design, and implement streaming iterator rather than iterator!
+
 impl<R, P, T> Iterator for LSystem<R, P, T>
 where
     T: PartialEq + Clone,
-    R: ProductionRules<P, T>,
+    R: QualifiedProductionRules<P, T>,
 {
     type Item = Vec<T>;
 
@@ -500,7 +542,7 @@ where
             .flat_map(|(i, c)| {
                 match self
                     .rules
-                    .apply(&mut self.context, c.clone(), i, &self.string, &mut rng)
+                    .apply_qualified(&mut self.context, &c, i, &self.string, &mut rng)
                 {
                     None => vec![c],
                     Some(replacement) => {
@@ -537,6 +579,8 @@ pub struct LSystemSelective<R, P, T> {
     /// Update the indicies stored in `P` to a new offset (a previous index was replaced by either a
     /// production greater than length 1, or 0). This is run on the result of every production rule.
     pub update_indicies: Box<UpdateIndicies<P>>,
+    /// Has been applied
+    pub applied: bool,
 }
 
 /// Used to generate the next contextual type `P` from the previous context, and previous string
@@ -557,61 +601,314 @@ pub type GetIndicies<P> = fn(&P) -> BTreeSet<usize>;
 /// whose indicies are _after_ the last element of the vector produced by the production rule.
 pub type UpdateIndicies<P> = fn(&mut P, usize, usize);
 
-impl<R, P, T> Iterator for LSystemSelective<R, P, T>
-where
-    T: PartialEq + Clone,
-    R: ProductionRules<P, T>,
-{
-    type Item = Vec<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut rng = thread_rng();
-        let mut applied = false;
-
-        let indicies = (self.get_indicies)(&self.context);
-
-        let mut new_string: Vec<Vec<T>> =
-            self.string.clone().into_iter().map(|c| vec![c]).collect();
-        for i in indicies {
-            if let Some(c) = new_string.get_mut(i) {
-                if let Some(replacement) =
-                    self.rules
-                        .apply(&mut self.context, c[0].clone(), i, &self.string, &mut rng)
-                {
-                    applied = true;
-                    let l = (*replacement).len();
-                    *c = replacement;
-                    if !l == 1 {
-                        let offset: usize = if l == 0 { 0 } else { l - 1 };
-                        (self.update_indicies)(&mut self.context, i + 1, offset)
-                    }
-                }
-            }
-        }
-        let new_string: Vec<T> = new_string.into_iter().flatten().collect();
-
-        if applied {
-            self.string = new_string.clone();
-            (self.mut_context)(&mut self.context, &self.string);
-            Some(new_string)
+impl<R, P, T> LSystemSelective<R, P, T> {
+    fn get_(&self) -> Option<&Vec<T>> {
+        if self.applied {
+            Some(&self.string)
         } else {
             None
         }
     }
 }
 
+impl<R, P, T> LSystemSelective<R, P, T>
+    where
+    R: QualifiedProductionRules<P, T>,
+    T: Clone,
+{
+    fn advance_qualified(&mut self) {
+        let mut rng = thread_rng();
+
+        let indicies: BTreeSet<usize> = (self.get_indicies)(&self.context);
+
+        self.applied = false;
+
+        let mut cumulative_offset: i64 = 0;
+
+        let old_string = self.string.clone();
+
+        for i in indicies {
+            let mut orig = self
+                .string
+                .split_off((i as i64 + cumulative_offset) as usize);
+            let mut tail = orig.split_off(1);
+            if let Some(mut replacement) =
+                self.rules
+                    .apply_qualified(&mut self.context, &orig[0], i, &old_string, &mut rng)
+            {
+                self.applied = true;
+                let l = replacement.len();
+                cumulative_offset += l as i64 - 1;
+                replacement.append(&mut tail);
+                self.string.append(&mut replacement);
+                (self.update_indicies)(&mut self.context, i + 1, l);
+            } else {
+                orig.append(&mut tail);
+                self.string.append(&mut orig);
+            }
+        }
+
+        if self.applied {
+            (self.mut_context)(&mut self.context, &self.string);
+        }
+    }
+}
+
+impl<R, P, T> LSystemSelective<R, P, T>
+    where
+    R: ProductionRules<P, T>,
+    T: Clone,
+{
+    fn advance_context_free(&mut self) {
+        let mut rng = thread_rng();
+
+        let indicies: BTreeSet<usize> = (self.get_indicies)(&self.context);
+
+        self.applied = false;
+
+        let mut cumulative_offset: i64 = 0;
+
+        for i in indicies {
+            let mut orig = self
+                .string
+                .split_off((i as i64 + cumulative_offset) as usize);
+            let mut tail = orig.split_off(1);
+            if let Some(mut replacement) =
+                self.rules
+                    .apply(&mut self.context, &orig[0], i, &mut rng)
+            {
+                self.applied = true;
+                let l = replacement.len();
+                cumulative_offset += l as i64 - 1;
+                replacement.append(&mut tail);
+                self.string.append(&mut replacement);
+                (self.update_indicies)(&mut self.context, i + 1, l);
+            } else {
+                orig.append(&mut tail);
+                self.string.append(&mut orig);
+            }
+        }
+
+        if self.applied {
+            (self.mut_context)(&mut self.context, &self.string);
+        }
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesHash<P, T, LRulesQualified<T>>, P, T>
+where
+    T: Hash + Eq + Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_qualified()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesFunction<P, T, LRulesQualified<T>>, P, T>
+where
+    T: PartialEq + Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_qualified()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesFunctionWithIndex<P, T, LRulesQualified<T>>, P, T>
+where
+    T: PartialEq + Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_qualified()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesHash<P, T, LRulesSet<T>>, P, T>
+where
+    T: Hash + Eq + Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesFunction<P, T, LRulesSet<T>>, P, T>
+where
+    T: Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemSelective<LRulesFunctionWithIndex<P, T, LRulesSet<T>>, P, T>
+where
+    T: Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+/// Version of an L-System in which unchanged tokens aren't kept - only newly generated tokens
+/// are iterated. This implies a few things:
+///
+/// - order of tokens doesn't matter in your L-System (they should have some kind of encoded identifier if
+///   being post-processed)
+/// - inactive indicies are thrown away - all indicies are assumed to be active, because the last iteration
+///   caused a successful production rule
+/// - any tokens that don't generate a production are thrown away
+/// - these L-Systems only make sense in a context-free scenario
+///
+/// This is useful in a situation where the tokens being generated can be processed and interpreted in a
+/// similarly context-free fashion in order to be useful, while also avoiding a combinatorial explosion
+/// s.t. all memory is consumed while generating a token string - in this circumstance, you'd process
+/// and interpret the newly generated tokens on each iteration of the StreamingIterator.
+pub struct LSystemDelta<R, P, T> {
+    /// The current token string - set this to an initial value (i.e., the _axiom_) when creating your L-System
+    pub string: Vec<T>,
+    /// The production rules applied to the string
+    pub rules: R,
+    /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
+    pub context: P,
+    /// Performed _after_ all production rules have been applied
+    pub mut_context: Box<MutContext<P, T>>,
+    /// Has been applied
+    pub applied: bool,
+}
+
+impl<R, P, T> LSystemDelta<R, P, T> {
+    fn get_(&self) -> Option<&Vec<T>> {
+        if self.applied {
+            Some(&self.string)
+        } else {
+            None
+        }
+    }
+}
+
+impl<R, P, T> LSystemDelta<R, P, T>
+    where
+    R: ProductionRules<P, T>,
+    T: Clone,
+{
+    fn advance_context_free(&mut self) {
+        let mut rng = thread_rng();
+
+        self.applied = false;
+
+        let mut new_string = vec![];
+
+        for (i, c) in self.string.iter().enumerate() {
+            if let Some(mut replacement) =
+                self.rules.apply(&mut self.context, c, i, &mut rng)
+            {
+                self.applied = true;
+                new_string.append(&mut replacement);
+            }
+        }
+
+        self.string = new_string;
+
+        if self.applied {
+            (self.mut_context)(&mut self.context, &self.string);
+        }
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemDelta<LRulesHash<P, T, LRulesSet<T>>, P, T>
+where
+    T: Hash + Eq + Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemDelta<LRulesFunction<P, T, LRulesSet<T>>, P, T>
+where
+    T: Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
+impl<P, T> StreamingIterator for LSystemDelta<LRulesFunctionWithIndex<P, T, LRulesSet<T>>, P, T>
+where
+    T: Clone,
+{
+    type Item = Vec<T>;
+
+    fn advance(&mut self) {
+        self.advance_context_free()
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.get_()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use streaming_iterator::StreamingIterator;
 
     #[test]
     fn rules_set_selects() {
-        let rules: LRulesSet<char> = vec![(1, vec!['a']), (1, vec!['b']), (1, vec!['c'])];
+        let rules: LRulesSet<char> = LRulesSet::new(vec![(1, vec!['a']), (1, vec!['b']), (1, vec!['c'])]);
         let mut rng = thread_rng();
         for _ in 0..10 {
-            let result = select(&rules, &mut rng);
+            let result = rules.select(&mut rng).clone();
             assert!(
-                result == ['a'] || result == ['b'] || result == ['c'],
+                result == vec!['a'] || result == vec!['b'] || result == vec!['c'],
                 "Result isn't a, b, or c: {:?}",
                 result
             );
@@ -654,21 +951,21 @@ mod tests {
     fn selective_has_same_results_as_normal_forall_indicies() {
         let axiom: Vec<char> = vec!['A'];
 
-        let mut lsystem: LSystem<LRulesHash<(), char>, (), char> = LSystem {
+        let mut lsystem: LSystem<LRulesHash<(), _, _>, (), char> = LSystem {
             string: axiom.clone(),
             rules: Box::new(|_| {
                 HashMap::from([
                     (
                         'A',
                         LRulesQualified {
-                            no_context: Some(vec![(1, vec!['A', 'B'])]),
+                            no_context: Some(LRulesSet::new(vec![(1, vec!['A', 'B'])])),
                             ..LRulesQualified::default()
                         },
                     ),
                     (
                         'B',
                         LRulesQualified {
-                            no_context: Some(vec![(1, vec!['A'])]),
+                            no_context: Some(LRulesSet::new(vec![(1, vec!['A'])])),
                             ..LRulesQualified::default()
                         },
                     ),
@@ -678,7 +975,7 @@ mod tests {
             mut_context: Box::new(|_, _| {}),
         };
 
-        let mut lsystem_selective: LSystemSelective<LRulesHash<usize, char>, usize, char> =
+        let mut lsystem_selective: LSystemSelective<LRulesHash<usize, _, _>, usize, char> =
             LSystemSelective {
                 string: axiom.clone(),
                 rules: Box::new(|_| {
@@ -686,14 +983,14 @@ mod tests {
                         (
                             'A',
                             LRulesQualified {
-                                no_context: Some(vec![(1, vec!['A', 'B'])]),
+                                no_context: Some(LRulesSet::new(vec![(1, vec!['A', 'B'])])),
                                 ..LRulesQualified::default()
                             },
                         ),
                         (
                             'B',
                             LRulesQualified {
-                                no_context: Some(vec![(1, vec!['A'])]),
+                                no_context: Some(LRulesSet::new(vec![(1, vec!['A'])])),
                                 ..LRulesQualified::default()
                             },
                         ),
@@ -708,15 +1005,20 @@ mod tests {
                     if offset == 0 {
                         *ctx -= 1;
                     } else {
-                        *ctx += offset;
+                        *ctx += offset - 1;
                     }
                 }),
+                applied: true,
             };
 
-        for _ in 0..20 {
-            let x = lsystem.next();
-            let y = lsystem_selective.next();
-            assert_eq!(x, y, "LSystems aren't equal");
+        for i in 1..20 {
+            let x: Option<Vec<char>> = lsystem.next();
+            let y: Option<Vec<char>> = lsystem_selective.next().cloned();
+            assert_eq!(
+                x,
+                y,
+                "LSystems aren't equal on iteration {i:}"
+            );
             assert_eq!(
                 lsystem_selective.context,
                 lsystem_selective.string.len(),

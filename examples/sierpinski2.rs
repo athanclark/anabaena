@@ -13,19 +13,19 @@ enum SierpinskiAlphabet {
 fn main() {
     use SierpinskiAlphabet::*;
 
-    let rules: LRulesHash<(), SierpinskiAlphabet> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = Box::new(|_| {
         HashMap::from([
             (
                 A,
                 LRulesQualified {
-                    no_context: Some(vec![(1, vec![B, Right, A, Right, B])]),
+                    no_context: Some(LRulesSet::new(vec![(1, vec![B, Right, A, Right, B])])),
                     ..LRulesQualified::default()
                 },
             ),
             (
                 B,
                 LRulesQualified {
-                    no_context: Some(vec![(1, vec![A, Left, B, Left, A])]),
+                    no_context: Some(LRulesSet::new(vec![(1, vec![A, Left, B, Left, A])])),
                     ..LRulesQualified::default()
                 },
             ),
