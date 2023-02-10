@@ -10,7 +10,7 @@ enum KochAlphabet {
 }
 
 fn main() {
-    let rules: LRulesHash<(), _, _> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = |_| {
         HashMap::from([(
             KochAlphabet::Forward,
             LRulesQualified {
@@ -31,13 +31,13 @@ fn main() {
                 ..LRulesQualified::default()
             },
         )])
-    });
+    };
 
     let mut lsystem = LSystem {
         string: vec![KochAlphabet::Forward],
         rules,
         context: (),
-        mut_context: Box::new(|_, _| {}),
+        mut_context: |_, _| {},
     };
 
     let set = lsystem.nth(2).unwrap();

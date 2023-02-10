@@ -273,7 +273,7 @@ pub trait QualifiedProductionRules<P, T> {
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char, LRulesQualified<char>> = Box::new(|_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesQualified<char>> = |_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
@@ -292,9 +292,9 @@ pub trait QualifiedProductionRules<P, T> {
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
-/// ]));
+/// ]);
 /// ```
-pub type LRulesHash<P, T, Q> = Box<dyn FnMut(&mut P) -> HashMap<T, Q>>;
+pub type LRulesHash<P, T, Q> = fn(&mut P) -> HashMap<T, Q>;
 
 impl<P, T> ProductionRules<P, T> for LRulesHash<P, T, LRulesSet<T>>
 where
@@ -341,7 +341,7 @@ where
 /// ```
 /// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesFunction<(), char, LRulesQualified<char>> = Box::new(|_, c| {
+/// let rules: LRulesFunction<(), char, LRulesQualified<char>> = |_, c| {
 ///     match c {
 ///         'A' =>
 ///             Some(LRulesQualified {
@@ -359,9 +359,9 @@ where
 ///             }),
 ///         _ => None,
 ///     }
-/// });
+/// };
 /// ```
-pub type LRulesFunction<P, T, Q> = Box<dyn FnMut(&mut P, &T) -> Option<Q>>;
+pub type LRulesFunction<P, T, Q> = fn(&mut P, &T) -> Option<Q>;
 
 impl<P, T> ProductionRules<P, T> for LRulesFunction<P, T, LRulesSet<T>>
 where
@@ -403,7 +403,7 @@ where
 /// Exact match of tokens to a set of production rules via a function, also including the token's index
 /// in the string being processed. Note that this is the index of the token during the current iteration
 /// of production rules, and the indicies won't update until the next iteration of the L-System.
-pub type LRulesFunctionWithIndex<P, T, Q> = Box<dyn FnMut(&mut P, &T, usize) -> Option<Q>>;
+pub type LRulesFunctionWithIndex<P, T, Q> = fn(&mut P, &T, usize) -> Option<Q>;
 
 impl<P, T> ProductionRules<P, T> for LRulesFunctionWithIndex<P, T, LRulesSet<T>>
 where
@@ -468,7 +468,7 @@ where
 /// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char, LRulesQualified<char>> = Box::new(|_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesQualified<char>> = |_| HashMap::from([
 ///     (
 ///         'A',
 ///         LRulesQualified {
@@ -487,7 +487,7 @@ where
 ///            ..LRulesQualified::default()
 ///         }
 ///     )
-/// ]));
+/// ]);
 ///
 /// let axiom: Vec<char> = vec!['A'];
 ///
@@ -495,7 +495,7 @@ where
 ///     string: axiom,
 ///     rules,
 ///     context: (),
-///     mut_context: Box::new(|_, _| {}),
+///     mut_context: |_, _| {},
 /// };
 ///
 /// assert_eq!(lsystem.next(), Some("AB".chars().collect()));
@@ -514,7 +514,7 @@ pub struct LSystem<R, P, T> {
     /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
     pub context: P,
     /// Performed _after_ all production rules have been applied
-    pub mut_context: Box<MutContext<P, T>>,
+    pub mut_context: MutContext<P, T>,
 }
 
 /// Used to generate the next contextual type `P` from the previous context, and previous string
@@ -953,7 +953,7 @@ mod tests {
 
         let mut lsystem: LSystem<LRulesHash<(), _, _>, (), char> = LSystem {
             string: axiom.clone(),
-            rules: Box::new(|_| {
+            rules: |_| {
                 HashMap::from([
                     (
                         'A',
@@ -970,15 +970,15 @@ mod tests {
                         },
                     ),
                 ])
-            }),
+            },
             context: (),
-            mut_context: Box::new(|_, _| {}),
+            mut_context: |_, _| {},
         };
 
         let mut lsystem_selective: LSystemSelective<LRulesHash<usize, _, _>, usize, char> =
             LSystemSelective {
                 string: axiom.clone(),
-                rules: Box::new(|_| {
+                rules: |_| {
                     HashMap::from([
                         (
                             'A',
@@ -995,7 +995,7 @@ mod tests {
                             },
                         ),
                     ])
-                }),
+                },
                 context: axiom.len(),
                 mut_context: |ctx: &mut usize, ts: &[char]| {
                     *ctx = ts.len();

@@ -13,7 +13,7 @@ enum SierpinskiAlphabet {
 fn main() {
     use SierpinskiAlphabet::*;
 
-    let rules: LRulesHash<(), _, _> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = |_| {
         HashMap::from([
             (
                 A,
@@ -30,13 +30,13 @@ fn main() {
                 },
             ),
         ])
-    });
+    };
 
     let mut lsystem = LSystem {
         string: vec![A],
         rules,
         context: (),
-        mut_context: Box::new(|_, _| {}),
+        mut_context: |_, _| {},
     };
 
     let set = lsystem.nth(6).unwrap();

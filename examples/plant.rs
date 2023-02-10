@@ -15,7 +15,7 @@ enum PlantAlphabet {
 fn main() {
     use PlantAlphabet::*;
 
-    let rules: LRulesHash<(), _, _> = Box::new(|_| {
+    let rules: LRulesHash<(), _, _> = |_| {
         HashMap::from([
             (
                 X,
@@ -38,13 +38,13 @@ fn main() {
                 },
             ),
         ])
-    });
+    };
 
     let mut lsystem = LSystem {
         string: vec![X],
         rules,
         context: (),
-        mut_context: Box::new(|_, _| {}),
+        mut_context: |_, _| {},
     };
 
     let set = lsystem.nth(5).unwrap();
