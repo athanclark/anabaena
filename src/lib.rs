@@ -573,7 +573,7 @@ pub struct LSystem<R, P, T, M: LSystemMode = Total> {
     /// The production rules applied to the string
     pub rules: R,
     /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
-    context: P,
+    pub context: P,
     /// Has been applied
     applied: bool,
     /// phantom data
