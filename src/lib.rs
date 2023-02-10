@@ -573,12 +573,12 @@ pub struct LSystemSelective<R, P, T> {
     /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
     pub context: P,
     /// Performed _after_ all production rules have been applied
-    pub mut_context: Box<MutContext<P, T>>,
+    pub mut_context: MutContext<P, T>,
     /// Fetch the indicies to perform the production rules
-    pub get_indicies: Box<GetIndicies<P>>,
+    pub get_indicies: GetIndicies<P>,
     /// Update the indicies stored in `P` to a new offset (a previous index was replaced by either a
     /// production greater than length 1, or 0). This is run on the result of every production rule.
-    pub update_indicies: Box<UpdateIndicies<P>>,
+    pub update_indicies: UpdateIndicies<P>,
     /// Has been applied
     pub applied: bool,
 }
@@ -807,7 +807,7 @@ pub struct LSystemDelta<R, P, T> {
     /// The mutable context used throughout the production rules, and lastly in-batch with `mut_context`
     pub context: P,
     /// Performed _after_ all production rules have been applied
-    pub mut_context: Box<MutContext<P, T>>,
+    pub mut_context: MutContext<P, T>,
     /// Has been applied
     pub applied: bool,
 }
@@ -997,17 +997,17 @@ mod tests {
                     ])
                 }),
                 context: axiom.len(),
-                mut_context: Box::new(|ctx, ts| {
+                mut_context: |ctx: &mut usize, ts: &[char]| {
                     *ctx = ts.len();
-                }),
-                get_indicies: Box::new(|ctx| (0..*ctx).collect()),
-                update_indicies: Box::new(|ctx, _i, offset| {
+                },
+                get_indicies: |ctx: &usize| (0..*ctx).collect(),
+                update_indicies: |ctx: &mut usize, _i: usize, offset: usize| {
                     if offset == 0 {
                         *ctx -= 1;
                     } else {
                         *ctx += offset - 1;
                     }
-                }),
+                },
                 applied: true,
             };
 
