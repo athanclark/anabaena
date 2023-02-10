@@ -1,5 +1,6 @@
 use anabaena::*;
 use std::collections::HashMap;
+use streaming_iterator::StreamingIterator;
 use turtle::{Angle, Distance, Point, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -16,9 +17,10 @@ fn main() {
             (
                 BTreeAlphabet::Line,
                 LRulesQualified {
-                    no_context: Some(LRulesSet::new(vec![
-                        (1, vec![BTreeAlphabet::Line, BTreeAlphabet::Line])
-                    ])),
+                    no_context: Some(LRulesSet::new(vec![(
+                        1,
+                        vec![BTreeAlphabet::Line, BTreeAlphabet::Line],
+                    )])),
                     ..LRulesQualified::default()
                 },
             ),
@@ -41,12 +43,7 @@ fn main() {
         ])
     };
 
-    let mut lsystem = LSystem {
-        string: vec![BTreeAlphabet::LineEndingInLeaf],
-        rules,
-        context: (),
-        mut_context: |_, _| {},
-    };
+    let mut lsystem = LSystem::new(vec![BTreeAlphabet::LineEndingInLeaf], rules);
 
     let set = lsystem.nth(6).unwrap();
 

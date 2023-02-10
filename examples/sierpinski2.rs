@@ -1,5 +1,6 @@
 use anabaena::*;
 use std::collections::HashMap;
+use streaming_iterator::StreamingIterator;
 use turtle::{Distance, Turtle};
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -32,12 +33,7 @@ fn main() {
         ])
     };
 
-    let mut lsystem = LSystem {
-        string: vec![A],
-        rules,
-        context: (),
-        mut_context: |_, _| {},
-    };
+    let mut lsystem = LSystem::new(vec![A], rules);
 
     let set = lsystem.nth(6).unwrap();
 
