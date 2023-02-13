@@ -35,12 +35,16 @@ impl<T> LRulesSet<T> {
 
     /// Selects a result generator randomly, then applies the context.
     fn select<'a, 'b>(&'a self, rng: &'b mut ThreadRng) -> &'a [T] {
-        let mut weights: Vec<u8> = vec![];
-        for (w, _) in self.0.iter() {
-            weights.push(*w);
+        if self.0.len() == 1 {
+            &self.0[0].1
+        } else {
+            let mut weights: Vec<u8> = vec![];
+            for (w, _) in self.0.iter() {
+                weights.push(*w);
+            }
+            let dist = WeightedIndex::new(&weights).unwrap();
+            &self.0[dist.sample(rng)].1
         }
-        let dist = WeightedIndex::new(&weights).unwrap();
-        &self.0[dist.sample(rng)].1
     }
 }
 
