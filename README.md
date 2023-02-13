@@ -10,7 +10,7 @@ L-System (Lindenmayer system) for Rust.
 - Support for [context sensitive grammars](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars)
 - Support for [parametric grammars](https://en.wikipedia.org/wiki/L-system#Parametric_grammars)
 - Mutable context support during individual production rules, and summarized after a round is complete
-- Generic production rule selection
+- Streaming iterator implementation
 
 ## Examples
 
@@ -20,45 +20,39 @@ Taken from the [Wikipedia article on L-Systems](https://en.wikipedia.org/wiki/L-
 the following is an implementation of the algae example:
 
 ```rust
-use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet};
+use anabaena::{LSystem, LRulesHash, LRulesSet, Total};
+use std::collections::HashMap;
+use streaming_iterator::StreamingIterator;
 
-let rules: LRulesHash<(), char> = LRulesHash::from([
+let rules: LRulesHash<(), char, LRulesSet<char>> = |_| HashMap::from([
     (
         'A',
-        LRulesQualified {
-           no_context: Some(vec![
-               (1, Box::new(|_| vec!['A', 'B'])),
-           ]),
-           ..LRulesQualified::default()
-        }
+        LRulesSet::new(vec![
+            (1, vec!['A', 'B']),
+        ]),
     ),
     (
         'B',
-        LRulesQualified {
-           no_context: Some(vec![
-               (1, Box::new(|_| vec!['A'])),
-           ]),
-           ..LRulesQualified::default()
-        }
+        LRulesSet::new(vec![
+            (1, vec!['A']),
+        ]),
     )
 ]);
 
 let axiom: Vec<char> = vec!['A'];
 
-let mut lsystem = LSystem {
-    string: axiom,
+let mut lsystem: LSystem<_,_,_, Total> = LSystem::new(
+    axiom,
     rules,
-    context: (),
-    mk_context: Box::new(|_, _| ()),
-};
+);
 
-assert_eq!(lsystem.next(), Some("AB".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABA".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABAAB".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABAABABA".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABAABABAABAAB".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABAABABAABAABABAABABA".chars().collect()));
-assert_eq!(lsystem.next(), Some("ABAABABAABAABABAABABAABAABABAABAAB".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"AB".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABA".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABAAB".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABAABABA".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABAABABAABAAB".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABAABABAABAABABAABABA".chars().collect()));
+assert_eq!(lsystem.next(), Some(&"ABAABABAABAABABAABABAABAABABAABAAB".chars().collect()));
 ```
 
 ### Examples with Turtle.rs

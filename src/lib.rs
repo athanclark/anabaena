@@ -1,9 +1,5 @@
 use rand::{distributions::WeightedIndex, prelude::*};
-use std::{
-    collections::{BTreeSet, HashMap},
-    hash::Hash,
-    marker::PhantomData,
-};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 use streaming_iterator::StreamingIterator;
 #[cfg(test)]
 extern crate quickcheck;
@@ -168,9 +164,10 @@ impl<T> PredicateNeighbors<T> {
     }
 }
 
-/// The complete set of production rules for a selected character, with gradually relaxing constraints.
+/// Production rules that depend on surrounding characters when selecting
+/// for a specific character, ordered by gradually relaxing constraints.
 ///
-/// Note that the _first_ stochastic production rule set is returned when qualifying a selected token - as
+/// Note that the _first_ production rule set is returned when qualifying a selected token - as
 /// an example, take the following set of rules around a selected token `'s'`:
 ///
 /// ```
@@ -191,8 +188,10 @@ impl<T> PredicateNeighbors<T> {
 /// ];
 /// ```
 ///
-/// This set of production rules then gets applied to the string `['a','s','b']`. The result is
-/// `['a','a','s','b']`, because only the first qualifier in `exact_matches` was picked. This further
+/// Let's say this set of production rules then gets applied to the string `['a','s','b']`. The result is
+/// `['a','a','s','b']`, because only the _first_ qualifier in `exact_matches` was picked.
+///
+/// This further
 /// expands to the other qualifiers `with_predicate` and `no_context` - the intent is to apply production
 /// rules with the order of "most specific" to "least specific", as [the Wikipedia article on context
 /// sensitive grammars details](https://en.wikipedia.org/wiki/L-system#Context_sensitive_grammars).
@@ -243,6 +242,8 @@ where
     }
 }
 
+/// Trait for applying production rules bound by [LRulesSet](LRulesSet), generic in the mechanism
+/// by which a selected character is matched.
 pub trait ProductionRules<P, T> {
     fn apply(
         &mut self,
@@ -253,7 +254,8 @@ pub trait ProductionRules<P, T> {
     ) -> Option<Vec<T>>;
 }
 
-/// Trait that allows different implementations of matching a specific token to their production rules
+/// Trait for applying production rules bound by [LRulesQualified](LRulesQualified), generic in the mechanism
+/// by which a selected character is matched.
 pub trait QualifiedProductionRules<P, T> {
     fn apply_qualified(
         &mut self,
@@ -266,8 +268,10 @@ pub trait QualifiedProductionRules<P, T> {
 }
 
 /// Implement this trait if you want to share an alternative mutable context throughout your production
-/// rules. `on_complete()` is run after all the production rules are applied in the current iteration.
+/// rules.
 pub trait ProductionRuleContext<T> {
+    /// This function runs after all the production rules have been applied and integrated into the
+    /// L-System's string state - the argument `tokens` represents the newly generated string.
     fn on_complete(&mut self, tokens: &[T]);
 }
 
@@ -284,24 +288,18 @@ impl<T> ProductionRuleContext<T> for () {
 /// use anabaena::{LRulesHash, LRulesQualified, LRulesSet};
 /// use std::collections::HashMap;
 ///
-/// let rules: LRulesHash<(), char, LRulesQualified<char>> = |_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesSet<char>> = |_| HashMap::from([
 ///     (
 ///         'A',
-///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
-///                (1, vec!['A', 'B']),
-///            ])),
-///            ..LRulesQualified::default()
-///         }
+///         LRulesSet::new(vec![
+///             (1, vec!['A', 'B']),
+///         ]),
 ///     ),
 ///     (
 ///         'B',
-///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
-///                (1, vec!['A']),
-///            ])),
-///            ..LRulesQualified::default()
-///         }
+///         LRulesSet::new(vec![
+///             (1, vec!['A']),
+///         ]),
 ///     )
 /// ]);
 /// ```
@@ -352,22 +350,16 @@ where
 /// ```
 /// use anabaena::{LRulesFunction, LRulesQualified, LRulesSet};
 ///
-/// let rules: LRulesFunction<(), char, LRulesQualified<char>> = |_, c| {
+/// let rules: LRulesFunction<(), char, LRulesSet<char>> = |_, c| {
 ///     match c {
 ///         'A' =>
-///             Some(LRulesQualified {
-///                no_context: Some(LRulesSet::new(vec![
-///                    (1, vec!['A', 'B']),
-///                ])),
-///                ..LRulesQualified::default()
-///             }),
+///             Some(LRulesSet::new(vec![
+///                 (1, vec!['A', 'B']),
+///             ])),
 ///         'B' =>
-///             Some(LRulesQualified {
-///                no_context: Some(LRulesSet::new(vec![
-///                    (1, vec!['A']),
-///                ])),
-///                ..LRulesQualified::default()
-///             }),
+///             Some(LRulesSet::new(vec![
+///                 (1, vec!['A']),
+///             ])),
 ///         _ => None,
 ///     }
 /// };
@@ -412,7 +404,9 @@ where
 }
 
 /// Exact match of tokens to a set of production rules via a function, also including the token's index
-/// in the string being processed. Note that this is the index of the token during the current iteration
+/// in the string being processed.
+///
+/// Note that this is the index of the token during the current iteration
 /// of production rules, and the indicies won't update until the next iteration of the L-System.
 pub type LRulesFunctionWithIndex<P, T, Q> = fn(&mut P, &T, usize) -> Option<Q>;
 
@@ -453,29 +447,31 @@ where
     }
 }
 
+/// Trait for qualifying phantom types for the L-System.
 pub trait LSystemMode {}
 
-/// Runs the production rules on every character in the string, every iteration
+/// Runs the production rules on every character in the string, every iteration.
 pub struct Total;
 
-/// Similarly to the [LSystem](LSystem), this operates as an iterator, however, the exact indicies in which
-/// the production rules are to be performed are derived from the context.
+/// Runs the production rules on only the indicies of the string returned by
+/// [get_indicies()](IndexedContext::get_indicies).
 pub struct Indexed;
 
-/// Version of an L-System in which unchanged tokens aren't kept - only newly generated tokens
-/// are iterated. This implies a few things:
+/// Runs the production rules on only the characters which had values generated last iteration.
 ///
-/// - order of tokens doesn't matter in your L-System (they should have some kind of encoded identifier if
-///   being post-processed)
+/// This has some strong implications about your L-System:
+///
+/// - order of tokens doesn't matter in your L-System (the alphabet
+///   should have some kind of encoded identifier if being post-processed)
 /// - inactive indicies are thrown away - all indicies are assumed to be active, because the last iteration
 ///   caused a successful production rule
 /// - any tokens that don't generate a production are thrown away
 /// - these L-Systems only make sense in a context-free scenario
 ///
 /// This is useful in a situation where the tokens being generated can be processed and interpreted in a
-/// similarly context-free fashion in order to be useful, while also avoiding a combinatorial explosion
+/// similarly context-free fashion, while also avoiding a combinatorial explosion
 /// s.t. all memory is consumed while generating a token string - in this circumstance, you'd process
-/// and interpret the newly generated tokens on each iteration of the StreamingIterator.
+/// and interpret the newly generated tokens on each iteration of the [StreamingIterator](StreamingIterator).
 pub struct Unordered;
 
 impl LSystemMode for Total {}
@@ -485,76 +481,88 @@ impl LSystemMode for Unordered {}
 /// Trait that represents contexts which can independently track the indicies of the tokens valid for
 /// generation in a particular L-System string.
 pub trait IndexedContext<T>: ProductionRuleContext<T> {
-    /// Used to generate the next contextual type `P` from the previous context, and previous string
-    /// of tokens `&[T]`.
-    fn get_indicies(&self) -> BTreeSet<usize>;
+    /// Apply production rules only to these indicies.
+    ///
+    /// Note - it's expected that the indicies are
+    /// **ordered from low to high** - without that guarantee,
+    /// [offset_indicies()](IndexedContext::offset_indicies)
+    /// couldn't provide a reasonable value to your context.
+    fn get_indicies(&self) -> Vec<usize>;
 
     /// Update `P` to reflect the change in indicies by some constant offset. The order of arguments is:
     ///
-    /// 1. Mutable context `P`
-    /// 2. Indicies greater than or equal to this index are affected
-    /// 3. Offset to apply
-    ///
-    /// Furthermore, an offset value of `0` indicates
-    /// that the indicies should be reduced by `1`. All other values indicate the offset should be increased by
+    /// Indicies greater than or equal to `starting_index` should only be affected. Furthermore, the `offset`
+    /// has unique semantics: an offset value of `0` indicates
+    /// that all indicies greater-than or equal to `starting_index` should be reduced by `1`.
+    /// All other values indicate the offset should be increased by
     /// that very value - i.e. a offset of `1` indicates the indicies should be increased by `1`.
-    /// It is also expected that any modifications to the context during the production rule respect the
-    /// new indicies without having to be compensated for - this function should only affect tokens
-    /// whose indicies are _after_ the last element of the vector produced by the production rule.
     fn offset_indicies(&mut self, starting_index: usize, offset: usize);
 }
 
-/// Consists of the current string of tokens, and the rules applied to it.
-/// Represents a running state, stepped as an Iterator.
+/// An L-System consists of the current string of tokens, and the rules applied to it.
+///
+/// Represents a running state, stepped as a [StreamingIterator](StreamingIterator).
 ///
 /// Note that the L-System is generic in the alphabet type `T` - this means we can define any
-/// Enum to treat as tokens, and even enrich them with parametric information as described in
+/// Enum to treat as an alphabet for tokens, and even enrich them with parametric information as described in
 /// [the Wikipedia article on Parametric grammars](https://en.wikipedia.org/wiki/L-system#Parametric_grammars).
 ///
-/// Furthermore, each iteration of the L-System can develop and share a "contextual state" `P`, to be used
-/// however you'd like when generating more tokens. It's a stateful value, and can be used to track
+/// Furthermore, each iteration of the L-System can develop and share a "contextual state" `P` to be used
+/// however you'd like when generating more tokens. It's a mutable value, and can be used to track
 /// concepts like age of the L-System, or pre-process the previous iteration's tokens to make production
 /// rules more efficient.
 ///
-/// Lastly, the L-System is also parametric in its production rule set implementation `R` - as long as the
-/// production rule system suits the [ProductionRules](ProductionRules) trait, then the L-System can iterate.
-/// We provide two simple implementations: [LRulesHash](LRulesHash), which indexes the production rule sets
-/// by each matching selector token `T` (implying `T` must suit `Hash` and `Eq`), and
-/// [LRulesFunction](LRulesFunction), which is a simple function where the author is expected to provide their
-/// own matching functionality.
+/// The L-System is also parametric in its production rule set implementation `R` - as long as the
+/// production rule system suits the [ProductionRules](ProductionRules) or
+/// [QualifiedProductionRules](QualifiedProductionRules) traits, then the L-System can iterate.
+///
+/// We provide three simple implementations:
+///
+/// - [LRulesHash](LRulesHash), which indexes the production rule sets
+///   by each matching selector token `T` (implying `T` must suit `Hash` and `Eq`)
+/// - [LRulesFunction](LRulesFunction), which is a simple function where the author is expected to provide their
+///   own matching functionality.
+/// - [LRulesFunctionWithIndex](LRulesFunctionWithIndex), which is identical to [LRulesFunction](LRulesFunction),
+///   but also includes the token's index in the string.
+///
+/// Lastly, [LSystem](LSystem) is enriched with a phantom type parameter `M`, which could be either
+/// [Total](Total), [Indexed](Indexed), or [Unordered](Unordered).
+///
+/// - [Total](Total) represents L-Systems where _every token_ is applied to the production rules on every
+///   iteration. This is nice for a proof-of-concept, but can become unweildy and inefficient very quickly.
+/// - [Indexed](Indexed) represents L-Systems where the context `P` dictates which tokens are considered
+///   active, by implementing [IndexedContext](IndexedContext). This can increase efficiency by skipping
+///   inactive / "terminal" tokens, but will still store the entire string produced by the L-System.
+/// - [Unordered](Unordered) represents L-Systems which have context-free grammars, and don't need the
+///   string they generate to be stored in entireity. This saves on memory substantially, but requires the
+///   alphabet to provide features like unique identifiers or other mechanisms in order to be useful.
 ///
 /// Taking the example from
 /// [Wikipedia on algae](https://en.wikipedia.org/wiki/L-system#Example_1:_Algae):
 ///
 /// ```
-/// use anabaena::{LSystem, LRulesHash, LRulesQualified, LRulesSet, Total};
+/// use anabaena::{LSystem, LRulesHash, LRulesSet, Total};
 /// use std::collections::HashMap;
 /// use streaming_iterator::StreamingIterator;
 ///
-/// let rules: LRulesHash<(), char, LRulesQualified<char>> = |_| HashMap::from([
+/// let rules: LRulesHash<(), char, LRulesSet<char>> = |_| HashMap::from([
 ///     (
 ///         'A',
-///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
-///                (1, vec!['A', 'B']),
-///            ])),
-///            ..LRulesQualified::default()
-///         }
+///         LRulesSet::new(vec![
+///             (1, vec!['A', 'B']),
+///         ]),
 ///     ),
 ///     (
 ///         'B',
-///         LRulesQualified {
-///            no_context: Some(LRulesSet::new(vec![
-///                (1, vec!['A']),
-///            ])),
-///            ..LRulesQualified::default()
-///         }
+///         LRulesSet::new(vec![
+///             (1, vec!['A']),
+///         ]),
 ///     )
 /// ]);
 ///
 /// let axiom: Vec<char> = vec!['A'];
 ///
-/// let mut lsystem = LSystem::new(
+/// let mut lsystem: LSystem<_,_,_, Total> = LSystem::new(
 ///     axiom,
 ///     rules,
 /// );
@@ -699,7 +707,7 @@ where
     fn advance_qualified_indexed(&mut self) {
         let mut rng = thread_rng();
 
-        let indicies: BTreeSet<usize> = self.context.get_indicies();
+        let indicies = self.context.get_indicies();
 
         self.applied = false;
 
@@ -743,7 +751,7 @@ where
     fn advance_context_free_indexed(&mut self) {
         let mut rng = thread_rng();
 
-        let indicies: BTreeSet<usize> = self.context.get_indicies();
+        let indicies = self.context.get_indicies();
 
         self.applied = false;
 
@@ -1132,7 +1140,7 @@ mod tests {
         }
 
         impl<T> IndexedContext<T> for IdxContext {
-            fn get_indicies(&self) -> BTreeSet<usize> {
+            fn get_indicies(&self) -> Vec<usize> {
                 (0..self.0).collect()
             }
 
