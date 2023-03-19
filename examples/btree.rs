@@ -16,34 +16,29 @@ fn main() {
         HashMap::from([
             (
                 BTreeAlphabet::Line,
-                LRulesQualified {
-                    no_context: Some(LRulesSet::new(vec![(
-                        1,
-                        vec![BTreeAlphabet::Line, BTreeAlphabet::Line],
-                    )])),
-                    ..LRulesQualified::default()
-                },
+                LRulesSet::new(vec![(
+                    1,
+                    vec![BTreeAlphabet::Line, BTreeAlphabet::Line],
+                )]),
             ),
             (
                 BTreeAlphabet::LineEndingInLeaf,
-                LRulesQualified {
-                    no_context: Some(LRulesSet::new(vec![(
-                        1,
-                        vec![
-                            BTreeAlphabet::Line,
-                            BTreeAlphabet::LeftPush,
-                            BTreeAlphabet::LineEndingInLeaf,
-                            BTreeAlphabet::RightPop,
-                            BTreeAlphabet::LineEndingInLeaf,
-                        ],
-                    )])),
-                    ..LRulesQualified::default()
-                },
+                LRulesSet::new(vec![(
+                    1,
+                    vec![
+                        BTreeAlphabet::Line,
+                        BTreeAlphabet::LeftPush,
+                        BTreeAlphabet::LineEndingInLeaf,
+                        BTreeAlphabet::RightPop,
+                        BTreeAlphabet::LineEndingInLeaf,
+                    ],
+                )]),
             ),
         ])
     };
 
-    let mut lsystem = LSystem::new(vec![BTreeAlphabet::LineEndingInLeaf], rules);
+    let mut lsystem: LSystem<LRulesHash<(), _, _>, (), BTreeAlphabet, Total> =
+        LSystem::new(vec![BTreeAlphabet::LineEndingInLeaf], rules);
 
     let set = lsystem.nth(6).unwrap();
 
